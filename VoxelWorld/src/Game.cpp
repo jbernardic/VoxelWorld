@@ -5,7 +5,6 @@
 #include "Renderer/Camera.h"
 #include "Renderer/VoxelMesh.h"
 #include "Graphics/Texture.h"
-#include "Graphics/UniformBuffer.h"
 
 #define OGT_VOX_IMPLEMENTATION
 #include "ogt_vox.h"
@@ -51,6 +50,7 @@ glm::vec2 MousePosition;
 std::shared_ptr<VoxelMesh> voxelMesh;
 std::shared_ptr<Texture<uint8_t>> voxel_data_texture;
 std::shared_ptr<Texture<glm::vec4>> voxel_palette_texture;
+std::shared_ptr<Buffer> storageBuffer;
 int GRID_SIZE;
 unsigned int _texture = 0;
 Camera camera;
@@ -89,7 +89,13 @@ void Game::Init()
 	voxelMesh = VoxelMesh::Create(glm::vec3(GRID_SIZE));
 
 	camera = Camera(75.0f, Application::W_WIDTH, Application::W_HEIGHT);
+	
+	size_t light_map_size = GRID_SIZE * GRID_SIZE * GRID_SIZE;
+	light_map_size = (light_map_size + 7) / 8;
 
+	std::vector<int> light_map(light_map_size, 1);
+	storageBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, light_map_size, light_map.data());
+	storageBuffer->BindBase(3);
 }
 
 unsigned int quadVAO = 0;

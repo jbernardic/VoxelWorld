@@ -5,23 +5,40 @@ class Buffer //VBO, IBO
 {
 public:
 	
-	enum class BufferType
+	enum class Type
 	{
-		VertexBuffer, IndexBuffer, UniformBuffer
+		VertexBuffer, IndexBuffer, UniformBuffer, ShaderStorageBuffer
 	};
 
-	Buffer(GLuint id, BufferType type);
+	static GLuint GetBufferType(Type type)
+	{
+		switch (type)
+		{
+		case Type::VertexBuffer:
+			return GL_ARRAY_BUFFER;
+		case Type::IndexBuffer:
+			return GL_ELEMENT_ARRAY_BUFFER;
+		case Type::UniformBuffer:
+			return GL_UNIFORM_BUFFER;
+		case Type::ShaderStorageBuffer:
+			return GL_SHADER_STORAGE_BUFFER;
+		}
+	}
+
+	Buffer(GLuint id, GLuint type, size_t size=0);
 	~Buffer();
 
-	const virtual void Bind() const;
-	const virtual void UnBind() const;
-	const virtual void SubData(size_t size, void* data, unsigned int offset = 0) const;
-	const GLuint& ID = m_ID;
+	const void Bind() const;
+	const void UnBind() const;
+	const void SubData(size_t size, void* data, unsigned int offset = 0) const;
+	const void BindBase(int bindingPoint) const;
 
-	static std::shared_ptr<Buffer> CreateVertexBuffer(size_t size, void* data = nullptr);
-	static std::shared_ptr<Buffer> CreateIndexBuffer(size_t size, void* data);
+	const GLuint& ID = id;
 
-protected:
-	GLuint m_ID;
-	BufferType m_Type;
+	static std::shared_ptr<Buffer> Create(Type type, size_t size=0, void* data = nullptr);
+
+private:
+	GLuint id;
+	GLuint type;
+	size_t size;
 };

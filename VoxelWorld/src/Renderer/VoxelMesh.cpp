@@ -7,8 +7,8 @@ VoxelMesh::VoxelMesh(std::array<glm::vec3, 8> vertices, std::array<int, 36> indi
 
     VA = VertexArray::Create();
     VA->Bind();
-    VB = Buffer::CreateVertexBuffer(Vertices.size() * sizeof(glm::vec3), (void*)Vertices.data());
-    IB = Buffer::CreateIndexBuffer(Indices.size() * sizeof(unsigned int), (void*)Indices.data());
+    VB = Buffer::Create(Buffer::Type::VertexBuffer, Vertices.size() * sizeof(glm::vec3), (void*)Vertices.data());
+    IB = Buffer::Create(Buffer::Type::IndexBuffer, Indices.size() * sizeof(unsigned int), (void*)Indices.data());
     VA->AddBuffer(VB.get(), 0, 3, GL_FLOAT, sizeof(glm::vec3), 0);
     VA->UnBind();
 }
