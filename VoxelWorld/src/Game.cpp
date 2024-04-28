@@ -59,7 +59,7 @@ Camera camera;
 void Game::Init()
 {
 	ResourceManager& rm = ResourceManager::GetInstance();
-	rm.LoadShader("res/Shaders/voxel.shader", "Quad");
+	rm.LoadShader("res/Shaders/voxel_light.shader", "Quad");
 
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();

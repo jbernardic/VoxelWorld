@@ -25,7 +25,33 @@ std::vector<ShaderSrc> Shader::GetShaderSource(const string& path)
 	string line;
 	GLuint type = 0;
 	vector<ShaderSrc> shaders;
+	vector<string> lines;
+	int line_cnt = 0;
 	while (getline(stream, line))
+	{
+		line_cnt++;
+		std::size_t include = line.find("#include ");
+		std::size_t version = line.find("#version ");
+		if (version != std::string::npos)
+		{
+			lines.push_back(line);
+			lines.push_back("#line " + to_string(line_cnt+1));
+		}
+		else if (include != std::string::npos)
+		{
+			std::string res = line.substr(include + 9);
+			ifstream f("res/Shaders/" + res);
+			assert(f.is_open());
+			string line2;
+			while (getline(f, line2))
+			{
+				lines.push_back(line2);
+			}
+			lines.push_back("#line " + to_string(line_cnt+1));
+		}
+		else lines.push_back(line);
+	}
+	for (string& line : lines)
 	{
 		if (line == "#shader vertex")
 		{
@@ -46,12 +72,12 @@ std::vector<ShaderSrc> Shader::GetShaderSource(const string& path)
 		{
 			assert(type != 0);
 			shaders[shaders.size() - 1].source += line + "\n";
-			shaders[shaders.size() - 1].line_count++;
 		}
 	}
-
 	return shaders;
 }
+
+
 
 void Shader::Bind() const
 {
@@ -92,18 +118,9 @@ GLuint Shader::CreateShader(const vector<ShaderSrc>& srcs)
 	GLuint program = glCreateProgram();
 
 	vector<GLuint> shader_objs;
-	int line_padding = 1;
 	for (const ShaderSrc& src : srcs)
 	{
-		//for easier debuging
-		string new_lines = "";
-		for (int i = 0; i < line_padding; i++)
-		{
-			new_lines += '\n';
-		}
-		line_padding += src.line_count+1;
-
-		GLuint shader = CompileShader(src.type, new_lines+src.source);
+		GLuint shader = CompileShader(src.type, src.source);
 		glAttachShader(program, shader);
 		shader_objs.push_back(shader);
 	}

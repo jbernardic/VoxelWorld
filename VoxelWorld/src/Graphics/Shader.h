@@ -12,7 +12,6 @@ struct ShaderSrc
 {
 	std::string source;
 	GLuint type;
-	unsigned int line_count = 0;
 };
 
 class Shader
