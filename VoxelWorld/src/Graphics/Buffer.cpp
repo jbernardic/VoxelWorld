@@ -39,13 +39,13 @@ const void Buffer::UnBind() const
 	}
 }
 
-const void Buffer::SubData(void* data, size_t size, unsigned int offset) const
+const void Buffer::SubData(size_t size, void* data, unsigned int offset) const
 {
 	Bind();
 	lcall(glBufferSubData(GL_ARRAY_BUFFER, offset, size, data));
 }
 
-std::shared_ptr<Buffer> Buffer::CreateVertexBuffer(void* data, size_t size)
+std::shared_ptr<Buffer> Buffer::CreateVertexBuffer(size_t size, void* data)
 {
 	GLuint id;
 	lcall(glGenBuffers(1, &id));
@@ -54,29 +54,11 @@ std::shared_ptr<Buffer> Buffer::CreateVertexBuffer(void* data, size_t size)
 	return std::make_shared<Buffer>(id, BufferType::VertexBuffer);
 }
 
-std::shared_ptr<Buffer> Buffer::CreateVertexBuffer(size_t size)
-{
-	GLuint id;
-	lcall(glGenBuffers(1, &id));
-	lcall(glBindBuffer(GL_ARRAY_BUFFER, id));
-	lcall(glBufferData(GL_ARRAY_BUFFER, size, nullptr, GL_DYNAMIC_DRAW));
-	return std::make_shared<Buffer>(id, BufferType::VertexBuffer);
-}
-
-std::shared_ptr<Buffer> Buffer::CreateIndexBuffer(void* data, size_t size)
+std::shared_ptr<Buffer> Buffer::CreateIndexBuffer(size_t size, void* data)
 {
 	GLuint id;
 	lcall(glGenBuffers(1, &id));
 	lcall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id));
 	lcall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, data, GL_STATIC_DRAW));
-	return std::make_shared<Buffer>(id, BufferType::IndexBuffer);
-}
-
-std::shared_ptr<Buffer> Buffer::CreateIndexBuffer(size_t size)
-{
-	GLuint id;
-	lcall(glGenBuffers(1, &id));
-	lcall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id));
-	lcall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, nullptr, GL_DYNAMIC_DRAW));
 	return std::make_shared<Buffer>(id, BufferType::IndexBuffer);
 }

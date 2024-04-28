@@ -15,13 +15,11 @@ public:
 
 	const virtual void Bind() const;
 	const virtual void UnBind() const;
-	const virtual void SubData(void* data, size_t size, unsigned int offset = 0) const;
+	const virtual void SubData(size_t size, void* data, unsigned int offset = 0) const;
 	const GLuint& ID = m_ID;
 
-	static std::shared_ptr<Buffer> CreateVertexBuffer(void* data, size_t size);
-	static std::shared_ptr<Buffer> CreateVertexBuffer(size_t size);
-	static std::shared_ptr<Buffer> CreateIndexBuffer(void* data, size_t size);
-	static std::shared_ptr<Buffer> CreateIndexBuffer(size_t size);
+	static std::shared_ptr<Buffer> CreateVertexBuffer(size_t size, void* data = nullptr);
+	static std::shared_ptr<Buffer> CreateIndexBuffer(size_t size, void* data);
 
 protected:
 	GLuint m_ID;

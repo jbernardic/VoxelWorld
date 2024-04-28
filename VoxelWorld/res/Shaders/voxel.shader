@@ -23,47 +23,48 @@ in vec3 vertexPosition;
 out vec4 fragColor;
 
 uniform vec3 camera_position;
-uniform vec3 sun_position = vec3(50, 80, 20);
-
-uniform vec3 ambient_color = vec3(0.5, 0.0, 0.0);
-
-uniform float sun_intensity = 1.0;
-uniform float sun_reach = 30.0;
-uniform float ambient_intensity = 1.0;
-
+uniform vec3 sun_direction = vec3(-2.0, -2.0, -2.0);
+uniform vec3 ambient_color = vec3(0.5);
 
 
 uniform vec3 grid_size;
-uniform sampler3D voxelTexture;
+layout(binding = 0) uniform sampler3D voxelTexture;
+layout(binding = 1) uniform sampler1D voxelPalette;
 
-const float VOXEL_SIZE = 1;
 const int MAX_RAY_STEPS = 200;
 
+float distance(vec3 a, vec3 b){
+    return  sqrt((a.x - b.x) * (a.x - b.x) +
+                    (a.y - b.y) * (a.y - b.y) +
+                    (a.z - b.z) * (a.z - b.z));
+}
 
-vec4 raycast(vec3 rayPos, vec3 rayDir, out float camera_distance, out float sun_distance)
+float get_voxel(vec3 coord){
+    return texture(voxelTexture, (coord + 0.5) / vec3(grid_size)).r;
+}
+
+vec4 raycast(vec3 rayPos, vec3 rayDir, out vec3 hitPosition)
 {
-    rayPos = rayPos / VOXEL_SIZE;
     ivec3 mapPos = ivec3(floor(rayPos + 0.));
     vec3 deltaDist = abs(vec3(length(rayDir)) / rayDir);
     ivec3 rayStep = ivec3(sign(rayDir));
     vec3 sideDist = (sign(rayDir) * (vec3(mapPos) - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist;
+    vec3 prev_mapPos = vec3(mapPos);
+    vec3 prev_sideDist = sideDist;
 
     for (int i = 0; i < MAX_RAY_STEPS; i++) {
         if (mapPos.x >= 0 && mapPos.x <= (grid_size.x - 1) &&
             mapPos.y >= 0 && mapPos.y <= (grid_size.y - 1) &&
             mapPos.z >= 0 && mapPos.z <= (grid_size.z - 1)) {
-            vec4 val = texture(voxelTexture, (vec3(mapPos) + 0.5) / vec3(grid_size));
+            float texel = get_voxel(vec3(mapPos));
+            vec4 val = texture(voxelPalette, texel);
             if (val.w == 1) {
-                camera_distance = sqrt((mapPos.x - rayPos.x) * (mapPos.x - rayPos.x) +
-                                (mapPos.y - rayPos.y) * (mapPos.y - rayPos.y) +
-                                (mapPos.z - rayPos.z) * (mapPos.z - rayPos.z)) * VOXEL_SIZE;
-                rayPos = sun_position / VOXEL_SIZE;
-                sun_distance = sqrt((mapPos.x - rayPos.x) * (mapPos.x - rayPos.x) +
-                                (mapPos.y - rayPos.y) * (mapPos.y - rayPos.y) +
-                                (mapPos.z - rayPos.z) * (mapPos.z - rayPos.z)) * VOXEL_SIZE;
+                hitPosition = vec3(mapPos)+0.5;
                 return val;
             }
         }
+        prev_mapPos = vec3(mapPos);
+        prev_sideDist = sideDist;
         if (sideDist.x < sideDist.y) {
             if (sideDist.x < sideDist.z) {
                 sideDist.x += deltaDist.x;
@@ -91,14 +92,19 @@ void main()
         vertexPosition - camera_position
     );
     
-    float camera_distance;
-    float sun_distance;
-    
-    vec4 voxel_color = raycast(camera_position, rayDirection, camera_distance, sun_distance);
+    vec3 voxel_position;
+    vec4 voxel_color = raycast(camera_position, rayDirection, voxel_position);
 
     if(voxel_color.w > 0.0) {
-        fragColor = voxel_color;
-        fragColor = mix(fragColor, vec4(ambient_color, 1.0), clamp(sun_distance/sun_reach, 1.0-sun_intensity, ambient_intensity));
+        fragColor = vec4(ambient_color, 1.0)*voxel_color;
+
+        vec3 hit;
+        vec4 t = raycast(voxel_position-normalize(sun_direction)*1.5, -sun_direction, hit);
+        vec3 diffuse = vec3(0.0);
+        if(t.w == 0.0){
+            fragColor = vec4(1.0, 1.0, 1.0, 1.0);
+        }
+        
     }
     else fragColor = vec4(0.0);
 }

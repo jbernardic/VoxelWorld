@@ -4,10 +4,11 @@
 #include "Core/ResourceManager.h"
 #include "Renderer/Camera.h"
 #include "Renderer/VoxelMesh.h"
+#include "Graphics/Texture.h"
+#include "Graphics/UniformBuffer.h"
 
 #define OGT_VOX_IMPLEMENTATION
 #include "ogt_vox.h"
-#include "Renderer/VoxelTexture.h"
 
 Game::Game()
 {
@@ -48,7 +49,9 @@ glm::vec2 MousePosition;
 
 
 std::shared_ptr<VoxelMesh> voxelMesh;
-std::shared_ptr<VoxelTexture> voxelTexture;
+std::shared_ptr<Texture<uint8_t>> voxel_data_texture;
+std::shared_ptr<Texture<glm::vec4>> voxel_palette_texture;
+int GRID_SIZE;
 unsigned int _texture = 0;
 Camera camera;
 
@@ -61,9 +64,7 @@ void Game::Init()
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();
 
-	voxelMesh = VoxelMesh::Create(glm::vec3(100));
-
-	std::ifstream t("res/skeleton.vox", std::ios::binary);
+	std::ifstream t("res/perlin.vox", std::ios::binary);
 	assert(t.is_open());
 	t.seekg(0, std::ios::end);
 	size_t size = t.tellg();
@@ -74,32 +75,18 @@ void Game::Init()
 	const ogt_vox_scene* scene = ogt_vox_read_scene(buffer, size);
 	delete[] buffer;
 
-	const int GRID_SIZE = scene->models[0]->size_x;
-	std::vector<glm::vec4> voxels(GRID_SIZE * GRID_SIZE * GRID_SIZE);
-
-	for (int x = 0; x < GRID_SIZE; x++)
+	GRID_SIZE = scene->models[0]->size_x;
+	std::vector<glm::vec4> palette;
+	for (const ogt_vox_rgba& col : scene->palette.color)
 	{
-		for (int y = 0; y < GRID_SIZE; y++)
-		{
-			for (int z = 0; z < GRID_SIZE; z++)
-			{
-				int index = scene->models[0]->voxel_data[x * GRID_SIZE * GRID_SIZE + y * GRID_SIZE + z];
-				//voxels[x * GRID_SIZE * GRID_SIZE + y * GRID_SIZE + z] = glm::vec4(glm::vec3((rand() % 256) / 255.0f, (rand() % 256) / 255.0f, (rand() % 256) / 255.0f), 1.0f);
-				if (index > 0)
-				{
-					float r = scene->palette.color[index].r / 255.f;
-					float g = scene->palette.color[index].g / 255.f;
-					float b = scene->palette.color[index].b / 255.f;
-					float a = scene->palette.color[index].a / 255.f;
-					voxels[x * GRID_SIZE * GRID_SIZE + y * GRID_SIZE + z] = glm::vec4(r, g, b, a);
-				}
-			
-				//std::cout << col.r << std::endl;
-			}
-		}
+		palette.emplace_back(col.r / 255.0f, col.g / 255.0f, col.b / 255.0f, col.a / 255.0f);
 	}
-	voxelTexture = VoxelTexture::Create(glm::ivec3(GRID_SIZE), voxels.data());
+	
+	voxel_data_texture = Texture<uint8_t>::Create3D_U8(GRID_SIZE, GRID_SIZE, GRID_SIZE, scene->models[0]->voxel_data);
+	voxel_palette_texture = Texture<glm::vec4>::Create1D_32F(palette.size(), palette.data());
 	ogt_vox_destroy_scene(scene);
+
+	voxelMesh = VoxelMesh::Create(glm::vec3(GRID_SIZE));
 
 	camera = Camera(75.0f, Application::W_WIDTH, Application::W_HEIGHT);
 
@@ -116,12 +103,13 @@ void Game::Draw()
 	ResourceManager::GetInstance().GetShader("Quad")->Bind();
 	voxelMesh->VA->Bind();
 	voxelMesh->IB->Bind();
-	voxelTexture->Bind();
+	voxel_data_texture->Bind(0);
+	voxel_palette_texture->Bind(1);
 
 	ResourceManager::GetInstance().GetShader("Quad")->SetVec3("camera_position", camera.GetPosition());
 	ResourceManager::GetInstance().GetShader("Quad")->SetMat4("camera_view", camera.GetViewMatrix());
 	ResourceManager::GetInstance().GetShader("Quad")->SetMat4("camera_projection", camera.GetProjectionMatrix());
-	ResourceManager::GetInstance().GetShader("Quad")->SetVec3("grid_size", voxelTexture->Size);
+	ResourceManager::GetInstance().GetShader("Quad")->SetVec3("grid_size", glm::vec3(GRID_SIZE));
 
 	glDrawElements(GL_TRIANGLES, voxelMesh->Indices.size(), GL_UNSIGNED_INT, 0);
 }
@@ -160,7 +148,7 @@ void Game::Update()
 	glm::vec3 forward = camera.GetForwardVector();
 	glm::vec3 right = camera.GetRightVector();
 	glm::vec3 up = camera.GetUpVector();
-	const float speed = 0.1f;
+	const float speed = 0.8f;
 	if (Application::Input.KeyDown(SDL_SCANCODE_A))
 	{
 		camera.SetPosition(camera.GetPosition() - right * speed);

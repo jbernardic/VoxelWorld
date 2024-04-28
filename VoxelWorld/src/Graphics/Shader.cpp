@@ -21,6 +21,7 @@ Shader::~Shader()
 std::vector<ShaderSrc> Shader::GetShaderSource(const string& path)
 {
 	ifstream stream(path);
+	assert(stream.is_open());
 	string line;
 	GLuint type = 0;
 	vector<ShaderSrc> shaders;
