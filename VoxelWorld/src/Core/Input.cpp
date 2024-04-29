@@ -11,6 +11,9 @@ void InputHandler::InitState()
 	//Keyboard state
 	free(m_KeyStates);
 	m_KeyStates = (Uint8*)calloc(SDL_NUM_SCANCODES, sizeof(Uint8));
+	m_PrevMouseState = m_MouseState;
+	m_MouseState = SDL_GetMouseState(NULL, NULL);
+
 	const Uint8* keyStates = SDL_GetKeyboardState(NULL);
 	if (m_KeyStates)
 	{
@@ -36,7 +39,6 @@ void InputHandler::HandleEvent(SDL_Event e)
 	case SDL_KEYUP:
 		if (!e.key.repeat)
 		{
-			int a = e.key.type;
 			m_KeyStates[e.key.keysym.scancode] = 3;
 		}
 		break;

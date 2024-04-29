@@ -28,11 +28,21 @@ public:
 		return m_KeyStates[sdl_scancode] == (int)KeyState::TriggerPressed || 
 			m_KeyStates[sdl_scancode] == (int)KeyState::KeyDown;
 	}
+	bool MouseButtonDown(int sdl_button) const
+	{
+		return m_MouseState & SDL_BUTTON(sdl_button);
+	}
+	bool MouseButtonPressed(int sdl_button) const
+	{
+		return (m_MouseState & SDL_BUTTON(sdl_button)) && !(m_PrevMouseState & SDL_BUTTON(sdl_button));
+	}
 	const glm::vec2& GetMousePosition() const
 	{
 		return m_MousePosition;
 	}
 private:
 	Uint8* m_KeyStates = nullptr;
+	Uint8 m_MouseState = 0;
+	Uint8 m_PrevMouseState = 0;
 	glm::vec2 m_MousePosition;
 };

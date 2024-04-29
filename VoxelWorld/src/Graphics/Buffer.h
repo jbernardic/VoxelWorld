@@ -28,10 +28,10 @@ public:
 	Buffer(GLuint id, GLuint type, size_t size=0);
 	~Buffer();
 
-	const void Bind() const;
-	const void UnBind() const;
-	const void SubData(size_t size, void* data, unsigned int offset = 0) const;
-	const void BindBase(int bindingPoint) const;
+	void Bind() const;
+	void UnBind() const;
+	void SubData(size_t size, void* data, unsigned int offset = 0) const;
+	void BindBase(int bindingPoint) const;
 
 	const GLuint& ID = id;
 

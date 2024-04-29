@@ -48,8 +48,6 @@ glm::vec2 MousePosition;
 
 
 std::shared_ptr<VoxelMesh> voxelMesh;
-std::shared_ptr<Texture<uint8_t>> voxel_data_texture;
-std::shared_ptr<Texture<glm::vec4>> voxel_palette_texture;
 std::shared_ptr<Buffer> storageBuffer;
 int GRID_SIZE;
 unsigned int _texture = 0;
@@ -64,7 +62,7 @@ void Game::Init()
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();
 
-	std::ifstream t("res/perlin.vox", std::ios::binary);
+	std::ifstream t("res/sphere.vox", std::ios::binary);
 	assert(t.is_open());
 	t.seekg(0, std::ios::end);
 	size_t size = t.tellg();
@@ -81,21 +79,17 @@ void Game::Init()
 	{
 		palette.emplace_back(col.r / 255.0f, col.g / 255.0f, col.b / 255.0f, col.a / 255.0f);
 	}
-	
-	voxel_data_texture = Texture<uint8_t>::Create3D_U8(GRID_SIZE, GRID_SIZE, GRID_SIZE, scene->models[0]->voxel_data);
-	voxel_palette_texture = Texture<glm::vec4>::Create1D_32F(palette.size(), palette.data());
+
+	std::vector<uint8_t> empty(GRID_SIZE * GRID_SIZE * GRID_SIZE);
+	voxelMesh = VoxelMesh::Create(glm::vec3(GRID_SIZE), empty.data(), palette.data());
+
 	ogt_vox_destroy_scene(scene);
 
-	voxelMesh = VoxelMesh::Create(glm::vec3(GRID_SIZE));
-
 	camera = Camera(75.0f, Application::W_WIDTH, Application::W_HEIGHT);
-	
-	size_t light_map_size = GRID_SIZE * GRID_SIZE * GRID_SIZE;
-	light_map_size = (light_map_size + 7) / 8;
 
-	std::vector<int> light_map(light_map_size, 1);
-	storageBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, light_map_size, light_map.data());
-	storageBuffer->BindBase(3);
+	//std::vector<float> light_map(GRID_SIZE * GRID_SIZE * GRID_SIZE, 0.0);
+	//storageBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, light_map.size()*sizeof(float), light_map.data());
+	//storageBuffer->BindBase(0);
 }
 
 unsigned int quadVAO = 0;
@@ -109,20 +103,20 @@ void Game::Draw()
 	ResourceManager::GetInstance().GetShader("Quad")->Bind();
 	voxelMesh->VA->Bind();
 	voxelMesh->IB->Bind();
-	voxel_data_texture->Bind(0);
-	voxel_palette_texture->Bind(1);
+	voxelMesh->DataTexture->Bind(0);
+	voxelMesh->PaletteTexture->Bind(1);
 
 	ResourceManager::GetInstance().GetShader("Quad")->SetVec3("camera_position", camera.GetPosition());
 	ResourceManager::GetInstance().GetShader("Quad")->SetMat4("camera_view", camera.GetViewMatrix());
 	ResourceManager::GetInstance().GetShader("Quad")->SetMat4("camera_projection", camera.GetProjectionMatrix());
-	ResourceManager::GetInstance().GetShader("Quad")->SetVec3("grid_size", glm::vec3(GRID_SIZE));
+	ResourceManager::GetInstance().GetShader("Quad")->SetIVec3("grid_size", glm::vec3(GRID_SIZE));
 
 	glDrawElements(GL_TRIANGLES, voxelMesh->Indices.size(), GL_UNSIGNED_INT, 0);
 }
 
 void Game::Update()
 {
-	std::cout << camera.GetPosition().x << " " << camera.GetPosition().y << " " << camera.GetPosition().z <<  std::endl;
+	//std::cout << camera.GetPosition().x << " " << camera.GetPosition().y << " " << camera.GetPosition().z <<  std::endl;
 	double last_mouse_x, last_mouse_y;
 	last_mouse_x = Application::Input.GetMousePosition().x;
 	last_mouse_y = Application::Input.GetMousePosition().y;
@@ -179,10 +173,30 @@ void Game::Update()
 	camera.SetPitch(pitch);
 	camera.SetYaw(yaw);
 
-
 	if (Application::Input.KeyPressed(SDL_SCANCODE_ESCAPE))
 	{
 		ShouldQuit = true;
+	}
+	if (Application::Input.MouseButtonDown(SDL_BUTTON_LEFT))
+	{
+		int data_size = 10;
+		glm::ivec3 mapPos = glm::ivec3(camera.GetPosition() - glm::vec3(data_size/2) + camera.GetForwardVector()*glm::vec3(10.0));
+		std::vector<uint8_t> new_data(data_size * data_size * data_size);
+		for (int x = 0; x < 10; x++)
+		{
+			for (int y = 0; y < 10; y++)
+			{
+				for (int z = 0; z < 10; z++)
+				{
+					int radius = 5;
+					int t = 5;
+					float distance = (x - t) * (x - t) + (y - t) * (y - t) + (z - t) * (z - t);
+					if (distance < radius * radius) new_data[x * 10 * 10 + y * 10 + z] = 50;
+					else new_data[x + 10 * (y + 10 * z)] = voxelMesh->GetVoxel(mapPos + glm::ivec3(x, y, z));
+				}
+			}
+		}
+		voxelMesh->UpdateData(mapPos, glm::ivec3(data_size), new_data.data());
 	}
 
 	MousePosition = glm::vec2(1280/2, 720/2);

@@ -158,6 +158,14 @@ void Shader::SetVec3(const char* name, glm::vec3 vec)
 	lcall(glUniform3f(location, vec.x, vec.y, vec.z));
 }
 
+void Shader::SetIVec3(const char* name, glm::ivec3 vec)
+{
+	Bind();
+	auto location = glGetUniformLocation(m_ID, name);
+	lcall(glUniform3i(location, vec.x, vec.y, vec.z));
+}
+
+
 void Shader::SetVec4(const char* name, glm::vec4 vec) const
 {
 	Bind();

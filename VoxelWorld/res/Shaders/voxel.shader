@@ -23,10 +23,27 @@ out vec4 fragColor;
 
 uniform vec3 camera_position;
 uniform vec3 sun_direction = vec3(-1.0, -1.0, -1.0);
-uniform vec3 grid_size;
+uniform ivec3 grid_size;
 
 layout(binding = 0) uniform sampler3D voxelTexture;
 layout(binding = 1) uniform sampler1D voxelPalette;
+
+layout(std430, binding = 0) buffer test
+{
+    float light_map[];
+};
+
+float get_light(vec3 coord){
+    ivec3 mapPos = ivec3(floor(coord));
+    return light_map[mapPos.x + mapPos.y * grid_size.x + mapPos.z * grid_size.x * grid_size.y];
+}
+
+void set_light(vec3 coord, float val){
+    ivec3 mapPos = ivec3(floor(coord));
+    light_map[mapPos.x + mapPos.y * grid_size.x + mapPos.z * grid_size.x * grid_size.y] = val;
+}
+
+
 
 float get_voxel(vec3 coord){
     return texture(voxelTexture, coord / vec3(grid_size)).r;
@@ -36,7 +53,7 @@ vec4 get_voxel_color(float voxel){
     return texture(voxelPalette, voxel);
 }
 
-const int MAX_RAY_STEPS = 200;
+const int MAX_RAY_STEPS = 1000;
 
 float raycast(vec3 rayPos, vec3 rayDir, out vec3 hitPosition)
 {

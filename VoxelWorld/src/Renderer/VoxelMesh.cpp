@@ -1,20 +1,12 @@
 #include "VoxelMesh.h"
 
 
-VoxelMesh::VoxelMesh(std::array<glm::vec3, 8> vertices, std::array<int, 36> indices) 
-	: Vertices(vertices), Indices(indices)
-{
-
-    VA = VertexArray::Create();
-    VA->Bind();
-    VB = Buffer::Create(Buffer::Type::VertexBuffer, Vertices.size() * sizeof(glm::vec3), (void*)Vertices.data());
-    IB = Buffer::Create(Buffer::Type::IndexBuffer, Indices.size() * sizeof(unsigned int), (void*)Indices.data());
-    VA->AddBuffer(VB.get(), 0, 3, GL_FLOAT, sizeof(glm::vec3), 0);
-    VA->UnBind();
-}
+VoxelMesh::VoxelMesh(std::array<glm::vec3, 8> vertices, std::array<int, 36> indices, glm::ivec3 size) 
+	: Vertices(vertices), Indices(indices), Size(size)
+{}
 
 
-std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::vec3 size, glm::vec3 position)
+std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::ivec3 size, const uint8_t* data, const glm::vec4* palette = nullptr)
 {
 
     std::array<glm::vec3, 8> vertices = {
@@ -57,5 +49,26 @@ std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::vec3 size, glm::vec3 position)
         6, 7, 3
     };
 
-    return std::make_shared<VoxelMesh>(vertices, indices);
+    auto mesh = std::make_shared<VoxelMesh>(vertices, indices, size);
+
+    mesh->VA = VertexArray::Create();
+    mesh->VA->Bind();
+    mesh->VB = Buffer::Create(Buffer::Type::VertexBuffer, mesh->Vertices.size() * sizeof(glm::vec3), (void*)mesh->Vertices.data());
+    mesh->IB = Buffer::Create(Buffer::Type::IndexBuffer, mesh->Indices.size() * sizeof(unsigned int), (void*)mesh->Indices.data());
+    mesh->VA->AddBuffer(mesh->VB.get(), 0, 3, GL_FLOAT, sizeof(glm::vec3), 0);
+    mesh->VA->UnBind();
+    mesh->DataTexture = Texture<uint8_t>::Create3D_U8(size.x, size.y, size.z, data);
+    mesh->PaletteTexture = Texture<glm::vec4>::Create1D_32F(256, palette);
+
+    return mesh;
+}
+
+void VoxelMesh::UpdateData(glm::ivec3 offset, glm::ivec3 size, const uint8_t* data) const
+{
+    DataTexture->Update3D_U8(offset, size, Size, data);
+}
+
+uint8_t VoxelMesh::GetVoxel(glm::ivec3 position) const
+{
+    return DataTexture->GetPixel3D(position, Size);
 }

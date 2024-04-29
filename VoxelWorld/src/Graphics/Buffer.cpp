@@ -9,23 +9,23 @@ Buffer::~Buffer()
 	lcall(glDeleteBuffers(1, &id));
 }
 
-const void Buffer::Bind() const
+void Buffer::Bind() const
 {
 	lcall(glBindBuffer(type, id));
 }
 
-const void Buffer::UnBind() const
+void Buffer::UnBind() const
 {
 	lcall(glBindBuffer(type, 0));
 }
 
-const void Buffer::SubData(size_t size, void* data, unsigned int offset) const
+void Buffer::SubData(size_t size, void* data, unsigned int offset) const
 {
 	Bind();
 	lcall(glBufferSubData(type, offset, size, data));
 }
 
-const void Buffer::BindBase(int bindingPoint) const
+void Buffer::BindBase(int bindingPoint) const
 {
 	lcall(glBindBufferBase(type, bindingPoint, id));
 }

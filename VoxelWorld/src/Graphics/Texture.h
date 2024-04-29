@@ -9,16 +9,45 @@ class Texture
 {
 public:
 
-	Texture(GLuint textureID, size_t size, const T* data) : textureID(textureID), data(data, data+size) {}
+	Texture(GLuint textureID, size_t size, const T* data) : id(textureID), data(data, data+size) {}
 
 	~Texture()
 	{
-		glDeleteTextures(1, &textureID);
+		glDeleteTextures(1, &id);
 	}
 
-	const void Bind(int binding = 0) const
+	void Bind(int binding = 0) const
 	{
-		glBindTextureUnit(binding, textureID);
+		glBindTextureUnit(binding, id);
+	}
+
+	void Update3D_U8(glm::ivec3 offset, glm::ivec3 size, glm::ivec3 image_size, const uint8_t* data)
+	{
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTextureSubImage3D(id, 0, offset.x, offset.y, offset.z, size.x, size.y, size.z, GL_RED, GL_UNSIGNED_BYTE, data);
+		for (int x = 0; x < size.x; x++)
+		{
+			for (int y = 0; y < size.y; y++)
+			{
+				for (int z = 0; z < size.z; z++)
+				{
+					int x1 = offset.x + x;
+					int y1 = offset.y + y;
+					int z1 = offset.z + z;
+					this->data[x1 + image_size.x * (y1 + image_size.y * z1)] = data[x + size.x * (y + size.y * z)];
+				}
+			}
+		}
+	}
+
+	T GetPixel3D(glm::ivec3 coord, glm::ivec3 image_size)
+	{
+		return data[coord.x + image_size.x * (coord.y + image_size.y * coord.z)];
+	}
+
+	T GetPixel1D(int index, size_t image_size)
+	{
+		return data[index];
 	}
 
 	static std::shared_ptr<Texture<T>> Create1D_32F(size_t size, const T* data)
@@ -51,6 +80,5 @@ public:
 	}
 private:
 	std::vector<T> data;
-	std::vector<glm::vec4> palette;
-	const GLuint textureID;
+	const GLuint id;
 };
