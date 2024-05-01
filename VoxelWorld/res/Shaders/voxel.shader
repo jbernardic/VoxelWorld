@@ -1,51 +1,29 @@
-#shader vertex
-#version 450 core
-layout (location = 0) in vec3 VERTEX;
-
-uniform mat4 camera_view;
-uniform mat4 camera_projection;
-uniform mat4 model = mat4(1.0);
-
-out vec3 vertexPosition;
-
-
-void main()
-{
-    gl_Position = camera_projection*camera_view*model*vec4(VERTEX, 1.0);
-	vertexPosition = VERTEX;
-}
-
-#shader fragment
-#version 450 core
-
-in vec3 vertexPosition;
-out vec4 fragColor;
-
-uniform vec3 camera_position;
-uniform vec3 sun_direction = vec3(-1.0, -1.0, -1.0);
-uniform ivec3 grid_size;
-
 layout(binding = 0) uniform sampler3D voxelTexture;
 layout(binding = 1) uniform sampler1D voxelPalette;
 
-layout(std430, binding = 0) buffer test
+layout(std430, binding = 2) buffer normal_map_storage
 {
-    float light_map[];
+    vec3 normal_map[];
 };
 
-float get_light(vec3 coord){
-    ivec3 mapPos = ivec3(floor(coord));
-    return light_map[mapPos.x + mapPos.y * grid_size.x + mapPos.z * grid_size.x * grid_size.y];
-}
+layout (std140, binding = 3) uniform voxel_ub
+{
+    uniform vec3 camera_position;
+    uniform vec3 sun_direction;
+    uniform ivec3 grid_size;
+};
 
-void set_light(vec3 coord, float val){
+int get_index(vec3 coord){
     ivec3 mapPos = ivec3(floor(coord));
-    light_map[mapPos.x + mapPos.y * grid_size.x + mapPos.z * grid_size.x * grid_size.y] = val;
+    return mapPos.x + mapPos.y * grid_size.x + mapPos.z * grid_size.x * grid_size.y;
 }
-
 
 
 float get_voxel(vec3 coord){
+    if(coord.x < 0 || coord.y < 0 || coord.z < 0 || 
+        coord.x >= grid_size.x || coord.y >= grid_size.y || coord.z >= grid_size.z){
+        return 0.0;
+    }
     return texture(voxelTexture, coord / vec3(grid_size)).r;
 }
 

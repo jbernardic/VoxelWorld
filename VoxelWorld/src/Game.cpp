@@ -1,6 +1,7 @@
 #include "Game.h"
 #include <iostream>
 #include <fstream>
+#include <chrono>
 #include "Core/ResourceManager.h"
 #include "Renderer/Camera.h"
 #include "Renderer/VoxelMesh.h"
@@ -38,17 +39,19 @@ bool Game::Tick()
 		}
 		pollEvent = SDL_PollEvent(&e);
 	}
-	Update();
+	long long timeDelta = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time).count();
+	time = std::chrono::high_resolution_clock::now();
+	Update(timeDelta/ 1000000000.0);
 	Draw();
 	SDL_GL_SwapWindow(Application::SDLWindow);
-
-	return !ShouldQuit;
+	return !shouldQuit;
 }
 glm::vec2 MousePosition;
 
 
 std::shared_ptr<VoxelMesh> voxelMesh;
 std::shared_ptr<Buffer> storageBuffer;
+std::shared_ptr<Buffer> voxelUniformBuffer;
 int GRID_SIZE;
 unsigned int _texture = 0;
 Camera camera;
@@ -57,12 +60,13 @@ Camera camera;
 void Game::Init()
 {
 	ResourceManager& rm = ResourceManager::GetInstance();
-	rm.LoadShader("res/Shaders/voxel_light.shader", "Quad");
+	rm.LoadShader("res/Shaders/voxel_light.shader", "voxel_light");
+	rm.LoadShader("res/Shaders/voxel_normals.shader", "voxel_normals");
 
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();
 
-	std::ifstream t("res/sphere.vox", std::ios::binary);
+	std::ifstream t("res/perlin.vox", std::ios::binary);
 	assert(t.is_open());
 	t.seekg(0, std::ios::end);
 	size_t size = t.tellg();
@@ -80,16 +84,26 @@ void Game::Init()
 		palette.emplace_back(col.r / 255.0f, col.g / 255.0f, col.b / 255.0f, col.a / 255.0f);
 	}
 
-	std::vector<uint8_t> empty(GRID_SIZE * GRID_SIZE * GRID_SIZE);
-	voxelMesh = VoxelMesh::Create(glm::vec3(GRID_SIZE), empty.data(), palette.data());
+	std::vector<uint8_t> empty(GRID_SIZE * GRID_SIZE * GRID_SIZE, 1.0);
+	voxelMesh = VoxelMesh::Create(glm::vec3(GRID_SIZE), scene->models[0]->voxel_data, palette.data());
 
 	ogt_vox_destroy_scene(scene);
 
 	camera = Camera(75.0f, Application::W_WIDTH, Application::W_HEIGHT);
 
-	//std::vector<float> light_map(GRID_SIZE * GRID_SIZE * GRID_SIZE, 0.0);
-	//storageBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, light_map.size()*sizeof(float), light_map.data());
-	//storageBuffer->BindBase(0);
+	size_t _size = GRID_SIZE * GRID_SIZE * GRID_SIZE;
+	storageBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, _size*sizeof(float)+_size*sizeof(glm::vec3), nullptr);
+
+	struct voxelUB
+	{
+		glm::vec4 camera_position;
+		glm::vec4 sun_direction = glm::vec4(0.0, -1.0, -1.0, -1.0);
+		glm::ivec4 grid_size = glm::ivec4(GRID_SIZE);
+	};
+	voxelUB ub;
+	voxelUniformBuffer = Buffer::Create(Buffer::Type::UniformBuffer, sizeof(voxelUB), &ub);
+	storageBuffer->BindBase(2);
+	voxelUniformBuffer->BindBase(3);
 }
 
 unsigned int quadVAO = 0;
@@ -98,25 +112,28 @@ unsigned int quadVBO;
 void Game::Draw()
 {
 
-	// render image to quad
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	ResourceManager::GetInstance().GetShader("Quad")->Bind();
+	ResourceManager::GetInstance().GetShader("voxel_normals")->Bind();
+	glDispatchCompute(64/8, 64/8, 64/8);
+	//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	
+	ResourceManager::GetInstance().GetShader("voxel_light")->Bind();
 	voxelMesh->VA->Bind();
 	voxelMesh->IB->Bind();
 	voxelMesh->DataTexture->Bind(0);
 	voxelMesh->PaletteTexture->Bind(1);
 
-	ResourceManager::GetInstance().GetShader("Quad")->SetVec3("camera_position", camera.GetPosition());
-	ResourceManager::GetInstance().GetShader("Quad")->SetMat4("camera_view", camera.GetViewMatrix());
-	ResourceManager::GetInstance().GetShader("Quad")->SetMat4("camera_projection", camera.GetProjectionMatrix());
-	ResourceManager::GetInstance().GetShader("Quad")->SetIVec3("grid_size", glm::vec3(GRID_SIZE));
+	ResourceManager::GetInstance().GetShader("voxel_light")->SetMat4("camera_view", camera.GetViewMatrix());
+	ResourceManager::GetInstance().GetShader("voxel_light")->SetMat4("camera_projection", camera.GetProjectionMatrix());
+	glm::vec3 camPos = camera.GetPosition();
+	voxelUniformBuffer->SubData(sizeof(glm::vec3), &camPos, 0);
 
 	glDrawElements(GL_TRIANGLES, voxelMesh->Indices.size(), GL_UNSIGNED_INT, 0);
 }
 
-void Game::Update()
+void Game::Update(double deltaTime)
 {
-	//std::cout << camera.GetPosition().x << " " << camera.GetPosition().y << " " << camera.GetPosition().z <<  std::endl;
+	//std::cout << 1.0/deltaTime <<  std::endl;
 	double last_mouse_x, last_mouse_y;
 	last_mouse_x = Application::Input.GetMousePosition().x;
 	last_mouse_y = Application::Input.GetMousePosition().y;
@@ -148,7 +165,7 @@ void Game::Update()
 	glm::vec3 forward = camera.GetForwardVector();
 	glm::vec3 right = camera.GetRightVector();
 	glm::vec3 up = camera.GetUpVector();
-	const float speed = 0.8f;
+	const float speed = 100.0*deltaTime;
 	if (Application::Input.KeyDown(SDL_SCANCODE_A))
 	{
 		camera.SetPosition(camera.GetPosition() - right * speed);
@@ -175,28 +192,33 @@ void Game::Update()
 
 	if (Application::Input.KeyPressed(SDL_SCANCODE_ESCAPE))
 	{
-		ShouldQuit = true;
+		shouldQuit = true;
 	}
 	if (Application::Input.MouseButtonDown(SDL_BUTTON_LEFT))
 	{
 		int data_size = 10;
 		glm::ivec3 mapPos = glm::ivec3(camera.GetPosition() - glm::vec3(data_size/2) + camera.GetForwardVector()*glm::vec3(10.0));
-		std::vector<uint8_t> new_data(data_size * data_size * data_size);
-		for (int x = 0; x < 10; x++)
+		if(!(mapPos.x < 0 or mapPos.x >= GRID_SIZE or mapPos.y < 0 or mapPos.y >= GRID_SIZE or mapPos.z < 0 or mapPos.z >= GRID_SIZE))
 		{
-			for (int y = 0; y < 10; y++)
+			std::vector<uint8_t> new_data(data_size * data_size * data_size);
+			for (int x = 0; x < 10; x++)
 			{
-				for (int z = 0; z < 10; z++)
+				for (int y = 0; y < 10; y++)
 				{
-					int radius = 5;
-					int t = 5;
-					float distance = (x - t) * (x - t) + (y - t) * (y - t) + (z - t) * (z - t);
-					if (distance < radius * radius) new_data[x * 10 * 10 + y * 10 + z] = 50;
-					else new_data[x + 10 * (y + 10 * z)] = voxelMesh->GetVoxel(mapPos + glm::ivec3(x, y, z));
+					for (int z = 0; z < 10; z++)
+					{
+						int radius = 5;
+						int t = 5;
+						float distance = (x - t) * (x - t) + (y - t) * (y - t) + (z - t) * (z - t);
+						if (distance < radius * radius) new_data[x * 10 * 10 + y * 10 + z] = 50;
+						else new_data[x + 10 * (y + 10 * z)] = voxelMesh->GetVoxel(mapPos + glm::ivec3(x, y, z));
+					}
 				}
 			}
+			//change later
+			voxelMesh->UpdateData(mapPos, glm::ivec3(data_size), new_data.data());
 		}
-		voxelMesh->UpdateData(mapPos, glm::ivec3(data_size), new_data.data());
+
 	}
 
 	MousePosition = glm::vec2(1280/2, 720/2);

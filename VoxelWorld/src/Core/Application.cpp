@@ -33,11 +33,12 @@ void Application::Create()
 	gladLoadGL();
 
 	//Use Vsync
-	if (SDL_GL_SetSwapInterval(1) < 0)
-	{
-		throw std::runtime_error("Unable to set up VSync");
-		return;
-	}
+	//if (SDL_GL_SetSwapInterval(1) < 0)
+	//{
+	//	throw std::runtime_error("Unable to set up VSync");
+	//	return;
+	//}
+	SDL_GL_SetSwapInterval(0);
 
 	int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
 	if (!(IMG_Init(imgFlags) & imgFlags))

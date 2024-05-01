@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL.h>
 #include "Core/Application.h"
+#include <chrono>
 
 class Game
 {
@@ -9,8 +10,9 @@ public:
 	~Game();
 	bool Tick();
 private:
-	bool ShouldQuit = false;
+	bool shouldQuit = false;
+	std::chrono::steady_clock::time_point time;
 	void Init();
 	void Draw();
-	void Update();
+	void Update(double deltaTime);
 };
