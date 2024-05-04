@@ -1,8 +1,8 @@
 #include "VoxelMesh.h"
 
 
-VoxelMesh::VoxelMesh(std::array<glm::vec3, 8> vertices, std::array<int, 36> indices, glm::ivec3 size) 
-	: Vertices(vertices), Indices(indices), Size(size)
+VoxelMesh::VoxelMesh(std::array<glm::vec3, 8> vertices, std::array<int, 36> indices, glm::ivec3 size, const uint8_t* data)
+	: Vertices(vertices), Indices(indices), Size(size), data(data, data+size.x*size.y*size.z)
 {}
 
 
@@ -49,7 +49,7 @@ std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::ivec3 size, const uint8_t* dat
         6, 7, 3
     };
 
-    auto mesh = std::make_shared<VoxelMesh>(vertices, indices, size);
+    auto mesh = std::make_shared<VoxelMesh>(vertices, indices, size, data);
 
     mesh->VA = VertexArray::Create();
     mesh->VA->Bind();
@@ -57,18 +57,42 @@ std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::ivec3 size, const uint8_t* dat
     mesh->IB = Buffer::Create(Buffer::Type::IndexBuffer, mesh->Indices.size() * sizeof(unsigned int), (void*)mesh->Indices.data());
     mesh->VA->AddBuffer(mesh->VB.get(), 0, 3, GL_FLOAT, sizeof(glm::vec3), 0);
     mesh->VA->UnBind();
-    mesh->DataTexture = Texture<uint8_t>::Create3D_U8(size.x, size.y, size.z, data);
-    mesh->PaletteTexture = Texture<glm::vec4>::Create1D_32F(256, palette);
+    mesh->VoxelTexture = Texture<uint8_t>::Create3D_RED_U8(size, data);
+    mesh->PaletteTexture = Texture<glm::vec4>::Create1D_RGBA_32F(256, palette);
+
+    std::vector<uint8_t> opacityData(size.x*size.y*size.z);
+    for (int i = 0; i < size.x * size.y * size.z; i++) opacityData[i] = data[i] > 0.0 ? 255 : 0;
+    mesh->OpacityMap = Texture<uint8_t>::CreateOpacityMap(size, opacityData.data());
+    mesh->OpacityMap->GenerateMipmap();
 
     return mesh;
 }
 
-void VoxelMesh::UpdateData(glm::ivec3 offset, glm::ivec3 size, const uint8_t* data) const
+void VoxelMesh::UpdateVoxels(glm::ivec3 offset, glm::ivec3 size, const uint8_t* data)
 {
-    DataTexture->Update3D_U8(offset, size, Size, data);
+    VoxelTexture->SubImage3D_RED_U8(offset, size, Size, data);
+
+    std::vector<uint8_t> opacityData(size.x * size.y * size.z);
+    for (int i = 0; i < size.x * size.y * size.z; i++) opacityData[i] = data[i] > 0.0 ? 255 : 0;
+    OpacityMap->SubImage3D_RED_U8(offset, size, Size, opacityData.data());
+    OpacityMap->GenerateMipmap();
+
+    for (int x = 0; x < size.x; x++)
+    {
+    	for (int y = 0; y < size.y; y++)
+    	{
+    		for (int z = 0; z < size.z; z++)
+    		{
+    			int x1 = offset.x + x;
+    			int y1 = offset.y + y;
+    			int z1 = offset.z + z;
+    			this->data[x1 + Size.x * (y1 + Size.y * z1)] = data[x + size.x * (y + size.y * z)];
+    		}
+    	}
+    }
 }
 
 uint8_t VoxelMesh::GetVoxel(glm::ivec3 position) const
 {
-    return DataTexture->GetPixel3D(position, Size);
+    return data[position.x + Size.x * (position.y + Size.y * position.z)];
 }

@@ -3,13 +3,14 @@
 #include <vector>
 #include <glad/glad.h>
 #include <memory>
+#include "../Debug/ErrorHandler.h"
 
 template <class T>
 class Texture
 {
 public:
 
-	Texture(GLuint textureID, size_t size, const T* data) : id(textureID), data(data, data+size) {}
+	Texture(GLuint textureID, size_t size, const T* data) : id(textureID) {}
 
 	~Texture()
 	{
@@ -21,36 +22,29 @@ public:
 		glBindTextureUnit(binding, id);
 	}
 
-	void Update3D_U8(glm::ivec3 offset, glm::ivec3 size, glm::ivec3 image_size, const uint8_t* data)
+	void SubImage3D_RED_U8(glm::ivec3 offset, glm::ivec3 size, glm::ivec3 image_size, const uint8_t* data, GLint level=0) const
 	{
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-		glTextureSubImage3D(id, 0, offset.x, offset.y, offset.z, size.x, size.y, size.z, GL_RED, GL_UNSIGNED_BYTE, data);
-		for (int x = 0; x < size.x; x++)
-		{
-			for (int y = 0; y < size.y; y++)
-			{
-				for (int z = 0; z < size.z; z++)
-				{
-					int x1 = offset.x + x;
-					int y1 = offset.y + y;
-					int z1 = offset.z + z;
-					this->data[x1 + image_size.x * (y1 + image_size.y * z1)] = data[x + size.x * (y + size.y * z)];
-				}
-			}
-		}
+		glTextureSubImage3D(id, level, offset.x, offset.y, offset.z, size.x, size.y, size.z, GL_RED, GL_UNSIGNED_BYTE, data);
 	}
 
-	T GetPixel3D(glm::ivec3 coord, glm::ivec3 image_size)
+	void SubImage3D_RED_32F(glm::ivec3 offset, glm::ivec3 size, glm::ivec3 image_size, const uint8_t* data, GLint level = 0) const
 	{
-		return data[coord.x + image_size.x * (coord.y + image_size.y * coord.z)];
+		//glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTextureSubImage3D(id, level, offset.x, offset.y, offset.z, size.x, size.y, size.z, GL_RED, GL_FLOAT, data);
 	}
 
-	T GetPixel1D(int index, size_t image_size)
+	void SubImage3D_RGBA_32F(glm::ivec3 offset, glm::ivec3 size, glm::ivec3 image_size, const uint8_t* data, GLint level = 0) const
 	{
-		return data[index];
+		lcall(glTextureSubImage3D(id, level, offset.x, offset.y, offset.z, size.x, size.y, size.z, GL_RGBA, GL_FLOAT, data));
 	}
 
-	static std::shared_ptr<Texture<T>> Create1D_32F(size_t size, const T* data)
+	void GenerateMipmap() const
+	{
+		glGenerateTextureMipmap(id);
+	}
+
+	static std::shared_ptr<Texture<T>> Create1D_RGBA_32F(size_t size, const T* data)
 	{
 		GLuint _texture;
 		glGenTextures(1, &_texture);
@@ -63,7 +57,7 @@ public:
 
 		return std::make_shared<Texture<T>>(_texture, size, data);
 	}
-	static std::shared_ptr<Texture<T>> Create3D_U8(size_t sizeX, size_t sizeY, size_t sizeZ, const T* data)
+	static std::shared_ptr<Texture<T>> Create3D_RED_U8(glm::ivec3 size, const T* data)
 	{
 		GLuint _texture;
 		glGenTextures(1, &_texture);
@@ -74,11 +68,39 @@ public:
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-		glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, sizeX, sizeY, sizeZ, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, size.x, size.y, size.z, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+		return std::make_shared<Texture<T>>(_texture, size.x * size.y * size.z, data);
+	}
 
-		return std::make_shared<Texture<T>>(_texture, sizeX*sizeY*sizeZ, data);
+	static std::shared_ptr<Texture<T>> CreateOpacityMap(glm::ivec3 size, const T* data)
+	{
+		GLuint _texture;
+		glGenTextures(1, &_texture);
+		glBindTexture(GL_TEXTURE_3D, _texture);
+
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, size.x, size.y, size.z, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+		return std::make_shared<Texture<T>>(_texture, size.x * size.y * size.z, data);
+	}
+
+	static std::shared_ptr<Texture<T>> Create3D_RGBA_32F(glm::ivec3 size, const T* data)
+	{
+		GLuint _texture;
+		glGenTextures(1, &_texture);
+		glBindTexture(GL_TEXTURE_3D, _texture);
+
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, size.x, size.y, size.z, 0, GL_RGBA, GL_FLOAT, data);
+		return std::make_shared<Texture<T>>(_texture, size.x * size.y * size.z, data);
 	}
 private:
-	std::vector<T> data;
 	const GLuint id;
 };

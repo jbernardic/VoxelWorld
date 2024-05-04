@@ -1,12 +1,13 @@
 layout(binding = 0) uniform sampler3D voxelTexture;
 layout(binding = 1) uniform sampler1D voxelPalette;
+layout(binding = 2) uniform sampler3D opacityMap;
 
-layout(std430, binding = 2) buffer normal_map_storage
+layout(std430, binding = 0) buffer normal_map_storage
 {
     vec3 normal_map[];
 };
 
-layout (std140, binding = 3) uniform voxel_ub
+layout (std140, binding = 1) uniform voxel_ub
 {
     uniform vec3 camera_position;
     uniform vec3 sun_direction;
@@ -19,12 +20,12 @@ int get_index(vec3 coord){
 }
 
 
-float get_voxel(vec3 coord){
+float get_voxel(vec3 coord, float lod=0.0){
     if(coord.x < 0 || coord.y < 0 || coord.z < 0 || 
         coord.x >= grid_size.x || coord.y >= grid_size.y || coord.z >= grid_size.z){
         return 0.0;
     }
-    return texture(voxelTexture, coord / vec3(grid_size)).r;
+    return textureLod(voxelTexture, coord / vec3(grid_size), lod).r;
 }
 
 vec4 get_voxel_color(float voxel){
