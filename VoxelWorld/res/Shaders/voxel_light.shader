@@ -29,14 +29,13 @@ float cone_trace_ao(vec3 start, vec3 dir){
     float res = 0.0;
     const int STEP_COUNT = 5;
     vec3 position = start;
-    float lod = 1.0;
     for(int i = 1; i<=STEP_COUNT; ++i){
         float val = textureLod(opacityMap, position/vec3(grid_size), log2(i+2)).r;
         res+= (1.0 - res) * val * (0.05*i);
-        position+=dir;
+        position+=dir*1.5;
     }
 
-    return 1.0-res;
+    return res;
 }
 
 void main()
@@ -51,7 +50,7 @@ void main()
 
         vec3 norm_sun_dir = normalize(sun_direction);
         vec3 voxel_normal = normal_map[get_index(voxel_position)];
-        float ao = cone_trace_ao(voxel_position+voxel_normal*2.0, voxel_normal);
+        float ao = 1-0.8*cone_trace_ao(voxel_position+voxel_normal*2.0, voxel_normal);
 
         //diffuse lightning
         float diff = max(dot(voxel_normal, -norm_sun_dir), 0.0);
