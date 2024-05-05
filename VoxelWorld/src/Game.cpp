@@ -50,8 +50,6 @@ glm::vec2 MousePosition;
 
 
 std::shared_ptr<VoxelMesh> voxelMesh;
-std::shared_ptr<Buffer> normalMapBuffer;
-std::shared_ptr<Buffer> AOMapBuffer;
 std::shared_ptr<Buffer> voxelUniformBuffer;
 int GRID_SIZE;
 unsigned int _texture = 0;
@@ -92,7 +90,6 @@ void Game::Init()
 	camera = Camera(75.0f, Application::W_WIDTH, Application::W_HEIGHT);
 
 	size_t _size = GRID_SIZE * GRID_SIZE * GRID_SIZE;
-	normalMapBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, _size*(sizeof(glm::vec3)+sizeof(float)), nullptr);
 
 	struct voxelUB
 	{
@@ -102,11 +99,10 @@ void Game::Init()
 	};
 	voxelUB ub;
 	voxelUniformBuffer = Buffer::Create(Buffer::Type::UniformBuffer, sizeof(voxelUB), &ub);
-	normalMapBuffer->BindBase(0);
-	voxelUniformBuffer->BindBase(1);
-	//AOMapBuffer->BindBase(2);
+	voxelUniformBuffer->BindBase(0);
 
 	voxelMesh->VoxelTexture->Bind(0);
+	voxelMesh->NormalMapBuffer->BindBase(0);
 	ResourceManager::GetInstance().GetShader("voxel_normals")->Bind();
 	ResourceManager::GetInstance().GetShader("voxel_normals")->SetVec3("work_position", glm::vec3(GRID_SIZE)/glm::vec3(2.0));
 	glDispatchCompute(GRID_SIZE / 8, GRID_SIZE / 8, GRID_SIZE / 8);
@@ -128,6 +124,7 @@ void Game::Draw()
 	voxelMesh->VoxelTexture->Bind(0);
 	voxelMesh->PaletteTexture->Bind(1);
 	voxelMesh->OpacityMap->Bind(2);
+	voxelMesh->NormalMapBuffer->BindBase(0);
 
 	ResourceManager::GetInstance().GetShader("voxel_light")->SetMat4("camera_view", camera.GetViewMatrix());
 	ResourceManager::GetInstance().GetShader("voxel_light")->SetMat4("camera_projection", camera.GetProjectionMatrix());

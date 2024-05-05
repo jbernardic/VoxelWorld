@@ -23,6 +23,7 @@ public:
 	std::shared_ptr<Texture<uint8_t>> VoxelTexture;
 	std::shared_ptr<Texture<glm::vec4>> PaletteTexture;
 	std::shared_ptr<Texture<uint8_t>> OpacityMap;
+	std::shared_ptr<Buffer> NormalMapBuffer;
 
 private:
 	std::vector<uint8_t> data;

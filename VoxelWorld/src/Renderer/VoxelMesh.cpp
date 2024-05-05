@@ -59,6 +59,7 @@ std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::ivec3 size, const uint8_t* dat
     mesh->VA->UnBind();
     mesh->VoxelTexture = Texture<uint8_t>::Create3D_RED_U8(size, data);
     mesh->PaletteTexture = Texture<glm::vec4>::Create1D_RGBA_32F(256, palette);
+    mesh->NormalMapBuffer = Buffer::Create(Buffer::Type::ShaderStorageBuffer, size.x*size.y*size.z * (sizeof(glm::vec3) + sizeof(float)), nullptr);
 
     std::vector<uint8_t> opacityData(size.x*size.y*size.z);
     for (int i = 0; i < size.x * size.y * size.z; i++) opacityData[i] = data[i] > 0.0 ? 255 : 0;
@@ -76,7 +77,6 @@ void VoxelMesh::UpdateVoxels(glm::ivec3 offset, glm::ivec3 size, const uint8_t* 
     for (int i = 0; i < size.x * size.y * size.z; i++) opacityData[i] = data[i] > 0.0 ? 255 : 0;
     OpacityMap->SubImage3D_RED_U8(offset, size, Size, opacityData.data());
     OpacityMap->GenerateMipmap();
-
     for (int x = 0; x < size.x; x++)
     {
     	for (int y = 0; y < size.y; y++)

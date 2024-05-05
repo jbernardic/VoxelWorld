@@ -87,20 +87,6 @@ public:
 		return std::make_shared<Texture<T>>(_texture, size.x * size.y * size.z, data);
 	}
 
-	static std::shared_ptr<Texture<T>> Create3D_RGBA_32F(glm::ivec3 size, const T* data)
-	{
-		GLuint _texture;
-		glGenTextures(1, &_texture);
-		glBindTexture(GL_TEXTURE_3D, _texture);
-
-		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-		glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, size.x, size.y, size.z, 0, GL_RGBA, GL_FLOAT, data);
-		return std::make_shared<Texture<T>>(_texture, size.x * size.y * size.z, data);
-	}
 private:
 	const GLuint id;
 };

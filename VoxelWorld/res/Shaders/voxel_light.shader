@@ -27,14 +27,13 @@ uniform vec4 ambient = vec4(0.5, 0.09, 0.098, 1.0);
 
 float cone_trace_ao(vec3 start, vec3 dir){
     float res = 0.0;
-    const int STEP_COUNT = 5;
+    const int STEP_COUNT = 3;
     vec3 position = start;
     for(int i = 1; i<=STEP_COUNT; ++i){
-        float val = textureLod(opacityMap, position/vec3(grid_size), log2(i+2)).r;
+        float val = textureLod(opacityMap, position/vec3(grid_size), log2(i+3)).r;
         res+= (1.0 - res) * val * (0.05*i);
         position+=dir*1.5;
     }
-
     return res;
 }
 
@@ -45,12 +44,12 @@ void main()
     );
 
     vec3 voxel_position = vec3(0.0);
-    float voxel = raycast(camera_position, rayDirection, voxel_position);
+    float voxel = raycast_voxel(camera_position, rayDirection, voxel_position);
     if(voxel != 0.0) {
 
         vec3 norm_sun_dir = normalize(sun_direction);
         vec3 voxel_normal = normal_map[get_index(voxel_position)];
-        float ao = 1-0.8*cone_trace_ao(voxel_position+voxel_normal*2.0, voxel_normal);
+        float ao = 1-cone_trace_ao(voxel_position+voxel_normal*2.0, voxel_normal);
 
         //diffuse lightning
         float diff = max(dot(voxel_normal, -norm_sun_dir), 0.0);
@@ -58,7 +57,7 @@ void main()
 
         //+voxel_normal-norm_sun_dir*2.8 to fix some shadow issues
         vec3 hit;
-        float shadow_voxel = raycast(voxel_position+voxel_normal-norm_sun_dir*2.8, -norm_sun_dir, hit);
+        float shadow_voxel = raycast_voxel(voxel_position+voxel_normal-norm_sun_dir*2.8, -norm_sun_dir, hit);
         if(shadow_voxel == 0.0){
             fragColor = (ambient*ao+diffuse)*get_voxel_color(voxel);
         }
