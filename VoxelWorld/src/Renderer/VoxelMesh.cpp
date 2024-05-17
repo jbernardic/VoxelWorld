@@ -72,7 +72,6 @@ std::shared_ptr<VoxelMesh> VoxelMesh::Create(glm::ivec3 size, const uint8_t* dat
 void VoxelMesh::UpdateVoxels(glm::ivec3 offset, glm::ivec3 size, const uint8_t* data)
 {
     VoxelTexture->SubImage3D_RED_U8(offset, size, Size, data);
-
     std::vector<uint8_t> opacityData(size.x * size.y * size.z);
     for (int i = 0; i < size.x * size.y * size.z; i++) opacityData[i] = data[i] > 0.0 ? 255 : 0;
     OpacityMap->SubImage3D_RED_U8(offset, size, Size, opacityData.data());

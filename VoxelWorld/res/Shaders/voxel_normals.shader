@@ -18,7 +18,7 @@ vec3 calculate_normal(vec3 coord, int sample_size){
             }
         }
     }
-   // if(cnt == 27 || cnt<=1) return normal;
+    if(cnt == 27 || cnt<=1) return normal;
 
     for(int x = -sample_size+1; x<sample_size; x++){
         for(int y = -sample_size+1; y<sample_size; y++){
@@ -51,9 +51,4 @@ void main() {
     int index = get_index(work_coord);
     vec3 normal = calculate_normal(work_coord, 6);
     normal_map[index] = normal;
-    
-    // if(normal != vec3(0.0)){
-    //     //calculate AO
-
-    // }
 }

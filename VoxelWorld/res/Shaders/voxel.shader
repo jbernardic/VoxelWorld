@@ -33,7 +33,7 @@ vec4 get_voxel_color(float voxel){
 
 const int MAX_RAY_STEPS = 1000;
 
-float raycast(sampler3D tex, float lod, vec3 rayPos, vec3 rayDir, out vec3 hitPosition)
+float _raycast(sampler3D tex, float lod, vec3 rayPos, vec3 rayDir, out vec3 hitPosition)
 {
     float voxelSize = pow(2, lod);
     rayPos = rayPos/voxelSize;
@@ -73,12 +73,12 @@ float raycast(sampler3D tex, float lod, vec3 rayPos, vec3 rayDir, out vec3 hitPo
     return 0.0;
 }
 
-float raycast_voxel(vec3 rayPos, vec3 rayDir, out vec3 hitPosition){
+float raycast(vec3 rayPos, vec3 rayDir, out vec3 hitPosition){
     float lod = log2(min(grid_size.x, min(grid_size.y, grid_size.z)));
     while(lod > 0.0){
         float voxelSize = pow(2, lod);
         vec3 hit;
-        float opacity = raycast(opacityMap, lod, rayPos, rayDir, hit);
+        float opacity = _raycast(opacityMap, lod, rayPos, rayDir, hit);
         if(opacity > 0.0){
             lod-=1.0;
             if(sign(hit-rayPos) == 1){
@@ -88,7 +88,7 @@ float raycast_voxel(vec3 rayPos, vec3 rayDir, out vec3 hitPosition){
         }
         else return 0.0;
     }
-    float voxel = raycast(voxelTexture, 0.0, rayPos, rayDir, hitPosition);
+    float voxel = _raycast(voxelTexture, 0.0, rayPos, rayDir, hitPosition);
     hitPosition+=0.5;
     return voxel;
 }

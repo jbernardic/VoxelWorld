@@ -6,6 +6,7 @@
 #include "Renderer/Camera.h"
 #include "Renderer/VoxelMesh.h"
 #include "Graphics/Texture.h"
+#include <glm/glm.hpp>
 
 #define OGT_VOX_IMPLEMENTATION
 #include "ogt_vox.h"
@@ -65,7 +66,7 @@ void Game::Init()
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();
 
-	std::ifstream t("res/sphere2.vox", std::ios::binary);
+	std::ifstream t("res/skeleton2.vox", std::ios::binary);
 	assert(t.is_open());
 	t.seekg(0, std::ios::end);
 	size_t size = t.tellg();
@@ -90,6 +91,10 @@ void Game::Init()
 	camera = Camera(75.0f, Application::W_WIDTH, Application::W_HEIGHT);
 
 	size_t _size = GRID_SIZE * GRID_SIZE * GRID_SIZE;
+
+	//glm::mat4 model = glm::mat4(1.0f);
+	//model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.3f, 0.5f));
+	//ResourceManager::GetInstance().GetShader("voxel_light")->SetMat4("model", model);
 
 	struct voxelUB
 	{
