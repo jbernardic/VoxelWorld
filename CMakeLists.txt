@@ -8,5 +8,6 @@ unset(CMAKE_PREFIX_PATH CACHE)
 
 project ("VoxelWorld")
 
-# Include sub-projects.
+add_subdirectory ("vendor/VulkanMemoryAllocator")
 add_subdirectory ("VoxelWorld")
+

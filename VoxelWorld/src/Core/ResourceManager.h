@@ -2,7 +2,7 @@
 #include <iostream>
 #include <SDL.h>
 #include <unordered_map>
-#include "../Graphics/Shader.h"
+//#include "../Graphics/Shader.h"
 
 #define RM ResourceManager::GetInstance()
 
@@ -22,7 +22,7 @@ public:
 	ResourceManager& operator=(const ResourceManager&) = delete;
 
 	void LoadShader(std::string path, const char* name);
-	Shader* GetShader(const char* name);
-private:
-	std::unordered_map<std::string, std::unique_ptr<Shader>> Shaders;
+	//Shader* GetShader(const char* name);
+//private:
+//	std::unordered_map<std::string, std::unique_ptr<Shader>> Shaders;
 };
