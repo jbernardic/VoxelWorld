@@ -13,10 +13,10 @@ find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
 find_package(Vulkan REQUIRED)
 
-add_executable (VoxelWorld "src/Main.cpp"   "src/Game.cpp" "src/Game.h"   "src/Core/Input.cpp" "src/Core/Input.h" "src/Core/ResourceManager.h" "src/Core/ResourceManager.cpp" "src/Core/Application.cpp" "src/Core/Application.h" "src/Renderer/Camera.cpp" "src/Renderer/Camera.h" "src/ogt_vox.h" "src/Vulkan/VkTypes.h" "src/Vulkan/VkContext.h" "src/Vulkan/VkContext.cpp" "src/Vulkan/VkTools.h" "src/Vulkan/VkImages.h" "src/Vulkan/VkDebug.h" "src/Vulkan/UniqueVmaAllocator.h")
+add_executable (VoxelWorld "src/Main.cpp"   "src/Game.cpp" "src/Game.h"   "src/Core/Input.cpp" "src/Core/Input.h" "src/Core/ResourceManager.h" "src/Core/ResourceManager.cpp" "src/Core/Application.cpp" "src/Core/Application.h" "src/Renderer/Camera.cpp" "src/Renderer/Camera.h" "src/ogt_vox.h" "src/Vulkan/VkTypes.h" "src/Vulkan/VkContext.h" "src/Vulkan/VkContext.cpp" "src/Vulkan/VkTools.h" "src/Vulkan/VkImages.h" "src/Vulkan/VkDebug.h" "src/Vulkan/UniqueVmaAllocator.h" "src/Loaders/GLTF.h" "src/Loaders/GLTF.cpp" "src/Renderer/Mesh.h" "src/Renderer/Mesh.cpp")
 
 include_directories(${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS} "${GLM_PATH}" "${ASSIMP_PATH}/include")
-target_link_libraries(VoxelWorld ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} "${ASSIMP_PATH}/bin/assimp-vc143-mt.lib" "GPUOpen::VulkanMemoryAllocator" "Vulkan::Vulkan")
+target_link_libraries(VoxelWorld fastgltf::fastgltf ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} "${ASSIMP_PATH}/bin/assimp-vc143-mt.lib" "GPUOpen::VulkanMemoryAllocator" "Vulkan::Vulkan")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET VoxelWorld PROPERTY CXX_STANDARD 20)

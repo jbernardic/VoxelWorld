@@ -1,5 +1,6 @@
 #pragma once
 #include "VkTypes.h"
+#include "../Renderer/Mesh.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -24,6 +25,7 @@ public:
     void Init(SDL_Window* window, uint32_t width, uint32_t height);
     void Draw();
     void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
+    FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
     vk::UniqueInstance Instance;
@@ -47,7 +49,8 @@ public:
     vk::UniqueCommandBuffer ImmCommandBuffer;
     AllocatedImage DrawImage;
     vk::Extent2D DrawExtent;
-    FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
+    std::vector<std::shared_ptr<Mesh>> testMeshes;
+    
 
 private:
     SDL_Window* sdl_window;
@@ -61,4 +64,5 @@ private:
     void create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount);
     void draw_background(vk::CommandBuffer cmd);
     void draw_geometry(vk::CommandBuffer cmd);
+    void init_default_data();
 };

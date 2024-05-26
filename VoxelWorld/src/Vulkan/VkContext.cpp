@@ -1,10 +1,13 @@
 #include "VkContext.h"
 #include "VkDebug.h"
 #include "VkTools.h"
+#include "../Loaders/GLTF.h"
 
 #include <stdexcept>
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
+
+#include <glm/gtx/transform.hpp>
 
 void VkContext::Init(SDL_Window* window, uint32_t width, uint32_t height)
 {
@@ -16,6 +19,7 @@ void VkContext::Init(SDL_Window* window, uint32_t width, uint32_t height)
     init_commands();
     init_sync_structures();
     init_graphics_pipeline();
+    init_default_data();
 }
 
 void VkContext::Draw()
@@ -235,8 +239,6 @@ void VkContext::draw_background(vk::CommandBuffer cmd)
 
 void VkContext::draw_geometry(vk::CommandBuffer cmd)
 {
-    // Begin a render pass connected to our draw image
-    
     vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(*DrawImage.imageView, nullptr, vk::ImageLayout::eGeneral);
 
     vk::RenderingInfo renderInfo{};
@@ -265,40 +267,32 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
 
     cmd.setScissor(0, scissor);
 
-
-    std::array<Vertex, 4> rect_vertices;
-
-    rect_vertices[0].position = { 0.5,-0.5, 0 };
-    rect_vertices[1].position = { 0.5,0.5, 0 };
-    rect_vertices[2].position = { -0.5,-0.5, 0 };
-    rect_vertices[3].position = { -0.5,0.5, 0 };
-
-    rect_vertices[0].color = { 0,0, 0,1 };
-    rect_vertices[1].color = { 0.5,0.5,0.5 ,1 };
-    rect_vertices[2].color = { 1,0, 0,1 };
-    rect_vertices[3].color = { 0,1, 0,1 };
-
-    std::array<uint32_t, 6> rect_indices;
-
-    rect_indices[0] = 0;
-    rect_indices[1] = 1;
-    rect_indices[2] = 2;
-
-    rect_indices[3] = 2;
-    rect_indices[4] = 1;
-    rect_indices[5] = 3;
-
-
-    auto rectangle = UploadMesh(rect_indices, rect_vertices);
-
     GPUDrawPushConstants push_constants;
-    push_constants.worldMatrix = glm::mat4{ 1.f };
-    push_constants.vertexBuffer = rectangle.vertexBufferAddress;
+
+    glm::mat4 view = glm::translate(glm::vec3{ 0,3,-5 });
+    // camera projection
+    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)DrawExtent.width / (float)DrawExtent.height, 0.1f, 10000.0f);
+
+    // invert the Y direction on projection matrix so that we are more similar
+    // to opengl and gltf axis
+    projection[1][1] *= 1;
+
+    glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+    push_constants.worldMatrix = projection * view * model;
+
+    push_constants.vertexBuffer = testMeshes[0]->Buffers.vertexBufferAddress;
     cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
-    cmd.bindIndexBuffer(rectangle.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-    cmd.drawIndexed(6, 1, 0, 0, 0);
+    cmd.bindIndexBuffer(testMeshes[0]->Buffers.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+    cmd.drawIndexed(testMeshes[0]->Surfaces[0].count, 1, testMeshes[0]->Surfaces[0].startIndex, 0, 0);
 
     cmd.endRendering();
+}
+
+void VkContext::init_default_data()
+{
+    testMeshes = GLTF::LoadMeshes("res/skeleton.glb");
 }
 
 void VkContext::init_commands()
