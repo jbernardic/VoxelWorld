@@ -24,8 +24,8 @@ void VkContext::Draw()
     auto swapchainImageIndex = Device->acquireNextImageKHR(*Swapchain, 1000000000, *GetCurrentFrame().SwapchainSemaphore);
     assert(swapchainImageIndex.result == vk::Result::eSuccess);
 
-    DrawExtent.width = DrawImage->imageExtent.width;
-    DrawExtent.height = DrawImage->imageExtent.height;
+    DrawExtent.width = DrawImage.imageExtent.width;
+    DrawExtent.height = DrawImage.imageExtent.height;
 
     vk::CommandBuffer cmd = *GetCurrentFrame().MainCommandBuffer;
     cmd.reset();
@@ -34,18 +34,18 @@ void VkContext::Draw()
 
     // transition our main draw image into general layout so we can write into it
     // we will overwrite it all so we dont care about what was the older layout
-    vk::tool::TransitionImage(cmd, DrawImage->image, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+    vk::tool::TransitionImage(cmd, DrawImage.image, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 
     draw_background(cmd);
 
-    vk::tool::TransitionImage(cmd, DrawImage->image, vk::ImageLayout::eGeneral, vk::ImageLayout::eAttachmentOptimal);
+    vk::tool::TransitionImage(cmd, DrawImage.image, vk::ImageLayout::eGeneral, vk::ImageLayout::eAttachmentOptimal);
 
     draw_geometry(cmd);
 
     //transition the draw image and the swapchain image into their correct transfer layouts
-    vk::tool::TransitionImage(cmd, DrawImage->image, vk::ImageLayout::eAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
+    vk::tool::TransitionImage(cmd, DrawImage.image, vk::ImageLayout::eAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
     vk::tool::TransitionImage(cmd, SwapchainImages[swapchainImageIndex.value], vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-    vk::tool::CopyImageToImage(cmd, DrawImage->image, SwapchainImages[swapchainImageIndex.value], DrawExtent, SwapchainInfo.imageExtent);
+    vk::tool::CopyImageToImage(cmd, DrawImage.image, SwapchainImages[swapchainImageIndex.value], DrawExtent, SwapchainInfo.imageExtent);
 
     // set swapchain image layout to Present so we can show it on the screen
     vk::tool::TransitionImage(cmd, SwapchainImages[swapchainImageIndex.value], vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::ePresentSrcKHR);
@@ -165,9 +165,8 @@ void VkContext::init_swapchain()
     create_swapchain(extent, surfaceFormat, presentMode, deviceCapabilities.currentTransform, imageCount);
 
     //Create DrawImage
-    AllocatedImage drawImage;
-    drawImage.imageFormat = vk::Format::eR16G16B16A16Sfloat;
-    drawImage.imageExtent = vk::Extent3D(w_width, w_height, 1);
+    DrawImage.imageFormat = vk::Format::eR16G16B16A16Sfloat;
+    DrawImage.imageExtent = vk::Extent3D(w_width, w_height, 1);
 
     vk::ImageUsageFlags drawImageUsages{};
     drawImageUsages |= vk::ImageUsageFlagBits::eTransferSrc;
@@ -175,17 +174,16 @@ void VkContext::init_swapchain()
     drawImageUsages |= vk::ImageUsageFlagBits::eStorage;
     drawImageUsages |= vk::ImageUsageFlagBits::eColorAttachment;
 
-    VkImageCreateInfo rimg_info = vk::tool::ImageCreateInfo(drawImage.imageFormat, drawImageUsages, drawImage.imageExtent);
+    VkImageCreateInfo rimg_info = vk::tool::ImageCreateInfo(DrawImage.imageFormat, drawImageUsages, DrawImage.imageExtent);
 
     VmaAllocationCreateInfo rimg_allocinfo = {};
     rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    vmaCreateImage(*Allocator, &rimg_info, &rimg_allocinfo, (VkImage*) & drawImage.image, &drawImage.allocation, nullptr);
+    vmaCreateImage(*Allocator, &rimg_info, &rimg_allocinfo, (VkImage*) &DrawImage.image, &DrawImage.allocation, nullptr);
 
-    drawImage.imageView = Device->createImageViewUnique(vk::tool::ImageViewCreateInfo(drawImage.imageFormat, drawImage.image, vk::ImageAspectFlagBits::eColor));
-    DrawImage = Allocator.AddImage(std::move(drawImage));
-    
+    DrawImage.imageView = Device->createImageViewUnique(vk::tool::ImageViewCreateInfo(DrawImage.imageFormat, DrawImage.image, vk::ImageAspectFlagBits::eColor));
+    Allocator.RegisterImage(DrawImage);
 }
 
 void VkContext::create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount)
@@ -232,14 +230,14 @@ void VkContext::draw_background(vk::CommandBuffer cmd)
     vk::ClearColorValue clearValue(0.0f, 0.0f, flash, 1.0f);
     vk::ImageSubresourceRange clearRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS);
 
-    cmd.clearColorImage(DrawImage->image, vk::ImageLayout::eGeneral, clearValue, clearRange);
+    cmd.clearColorImage(DrawImage.image, vk::ImageLayout::eGeneral, clearValue, clearRange);
 }
 
 void VkContext::draw_geometry(vk::CommandBuffer cmd)
 {
     // Begin a render pass connected to our draw image
     
-    vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(*DrawImage->imageView, nullptr, vk::ImageLayout::eGeneral);
+    vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(*DrawImage.imageView, nullptr, vk::ImageLayout::eGeneral);
 
     vk::RenderingInfo renderInfo{};
     renderInfo.renderArea.extent = DrawExtent;
@@ -297,7 +295,7 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
     push_constants.worldMatrix = glm::mat4{ 1.f };
     push_constants.vertexBuffer = rectangle.vertexBufferAddress;
     cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
-    cmd.bindIndexBuffer(rectangle.indexBuffer->buffer, 0, vk::IndexType::eUint32);
+    cmd.bindIndexBuffer(rectangle.indexBuffer.buffer, 0, vk::IndexType::eUint32);
     cmd.drawIndexed(6, 1, 0, 0, 0);
 
     cmd.endRendering();
@@ -447,7 +445,7 @@ GPUMeshBuffers VkContext::UploadMesh(std::span<uint32_t> indices, std::span<Vert
         VMA_MEMORY_USAGE_GPU_ONLY);
 
     //find the adress of the vertex buffer
-    vk::BufferDeviceAddressInfo deviceAdressInfo(newSurface.vertexBuffer->buffer);
+    vk::BufferDeviceAddressInfo deviceAdressInfo(newSurface.vertexBuffer.buffer);
     newSurface.vertexBufferAddress = Device->getBufferAddress(deviceAdressInfo);
 
     //create index buffer
@@ -470,14 +468,14 @@ GPUMeshBuffers VkContext::UploadMesh(std::span<uint32_t> indices, std::span<Vert
         vertexCopy.srcOffset = 0;
         vertexCopy.size = vertexBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.vertexBuffer->buffer, vertexCopy);
+        cmd.copyBuffer(staging.buffer, newSurface.vertexBuffer.buffer, vertexCopy);
 
         vk::BufferCopy indexCopy{ 0 };
         indexCopy.dstOffset = 0;
         indexCopy.srcOffset = vertexBufferSize;
         indexCopy.size = indexBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.indexBuffer->buffer, indexCopy);
+        cmd.copyBuffer(staging.buffer, newSurface.indexBuffer.buffer, indexCopy);
     });
 
     vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);

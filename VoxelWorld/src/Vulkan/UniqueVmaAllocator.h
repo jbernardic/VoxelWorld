@@ -10,27 +10,6 @@ struct AllocatedBuffer
 
 struct AllocatedImage
 {
-	// Move constructor
-	AllocatedImage(AllocatedImage&& t) noexcept
-		: image(t.image),
-		imageView(std::move(t.imageView)),
-		allocation(t.allocation),
-		imageExtent(t.imageExtent),
-		imageFormat(t.imageFormat)
-	{
-		t.image = nullptr;
-		t.allocation = nullptr;
-	}
-
-	// Default constructor
-	AllocatedImage()
-		: image(nullptr),
-		imageView(nullptr),
-		allocation(nullptr),
-		imageExtent({ 0, 0, 0 }),
-		imageFormat(vk::Format::eUndefined)
-	{}
-
 	vk::Image image;
 	vk::UniqueImageView imageView;
 	VmaAllocation allocation;
@@ -45,11 +24,11 @@ public:
 	{
 		for (const auto& e : images)
 		{
-			vmaDestroyImage(ptr, e.image, e.allocation);
+			vmaDestroyImage(ptr, e.first, e.second);
 		}
 		for (const auto& e : buffers)
 		{
-			vmaDestroyBuffer(ptr, e.buffer, e.allocation);
+			vmaDestroyBuffer(ptr, e.first, e.second);
 		}
 		vmaDestroyAllocator(ptr);
 	}
@@ -57,15 +36,13 @@ public:
 	{
 		this->ptr = allocator;
 	}
-	AllocatedImage* AddImage(AllocatedImage&& image)
+	void RegisterImage(AllocatedImage& image)
 	{
-		images.push_back(std::move(image));
-		return &images.back();
+		images.push_back({image.image, image.allocation});
 	}
-	AllocatedBuffer* AddBuffer(AllocatedBuffer&& buffer)
+	void RegisterBuffer(AllocatedBuffer& buffer)
 	{
-		buffers.push_back(std::move(buffer));
-		return &buffers.back();
+		buffers.push_back({ buffer.buffer, buffer.allocation });
 	}
 	AllocatedBuffer CreateBuffer(size_t allocSize, vk::BufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 	{
@@ -85,9 +62,11 @@ public:
 
 		return newBuffer;
 	}
-	AllocatedBuffer* CreateBufferUnique(size_t allocSize, vk::BufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+	AllocatedBuffer CreateBufferUnique(size_t allocSize, vk::BufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 	{
-		return AddBuffer(std::move(CreateBuffer(allocSize, usage, memoryUsage)));
+		auto buffer = CreateBuffer(allocSize, usage, memoryUsage);
+		RegisterBuffer(buffer);
+		return buffer;
 	}
 	VmaAllocator Get() const
 	{
@@ -103,6 +82,6 @@ public:
 	}
 private:
 	VmaAllocator ptr;
-	std::deque<AllocatedImage> images;
-	std::deque<AllocatedBuffer> buffers;
+	std::vector<std::pair<vk::Image, VmaAllocation>> images;
+	std::vector<std::pair<vk::Buffer, VmaAllocation>> buffers;
 };

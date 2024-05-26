@@ -26,8 +26,6 @@ public:
     void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
-    AllocatedImage* DrawImage;
-    vk::Extent2D DrawExtent;
     vk::UniqueInstance Instance;
     vk::UniqueDebugUtilsMessengerEXT DebugMessenger;
     vk::PhysicalDevice PhysicalDevice;
@@ -47,6 +45,8 @@ public:
     vk::UniqueFence ImmFence;
     vk::UniqueCommandPool ImmCommandPool;
     vk::UniqueCommandBuffer ImmCommandBuffer;
+    AllocatedImage DrawImage;
+    vk::Extent2D DrawExtent;
     FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
 
 private:

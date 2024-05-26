@@ -35,8 +35,8 @@ struct Vertex
 struct GPUMeshBuffers
 {
 
-	AllocatedBuffer* indexBuffer;
-	AllocatedBuffer* vertexBuffer;
+	AllocatedBuffer indexBuffer;
+	AllocatedBuffer vertexBuffer;
 	VkDeviceAddress vertexBufferAddress;
 };
 
