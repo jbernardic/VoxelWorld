@@ -1,9 +1,8 @@
 #include "VkContext.h"
 #include "VkDebug.h"
-#include "VkUtils.h"
+#include "VkTools.h"
 
 #include <stdexcept>
-#include <SDL_vulkan.h>
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
@@ -268,8 +267,38 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
 
     cmd.setScissor(0, scissor);
 
-    // Launch a draw command to draw 3 vertices
-    cmd.draw(3, 1, 0, 0);
+
+    std::array<Vertex, 4> rect_vertices;
+
+    rect_vertices[0].position = { 0.5,-0.5, 0 };
+    rect_vertices[1].position = { 0.5,0.5, 0 };
+    rect_vertices[2].position = { -0.5,-0.5, 0 };
+    rect_vertices[3].position = { -0.5,0.5, 0 };
+
+    rect_vertices[0].color = { 0,0, 0,1 };
+    rect_vertices[1].color = { 0.5,0.5,0.5 ,1 };
+    rect_vertices[2].color = { 1,0, 0,1 };
+    rect_vertices[3].color = { 0,1, 0,1 };
+
+    std::array<uint32_t, 6> rect_indices;
+
+    rect_indices[0] = 0;
+    rect_indices[1] = 1;
+    rect_indices[2] = 2;
+
+    rect_indices[3] = 2;
+    rect_indices[4] = 1;
+    rect_indices[5] = 3;
+
+
+    auto rectangle = UploadMesh(rect_indices, rect_vertices);
+
+    GPUDrawPushConstants push_constants;
+    push_constants.worldMatrix = glm::mat4{ 1.f };
+    push_constants.vertexBuffer = rectangle.vertexBufferAddress;
+    cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
+    cmd.bindIndexBuffer(rectangle.indexBuffer->buffer, 0, vk::IndexType::eUint32);
+    cmd.drawIndexed(6, 1, 0, 0, 0);
 
     cmd.endRendering();
 }
@@ -286,6 +315,12 @@ void VkContext::init_commands()
         auto commandBuffers = Device->allocateCommandBuffersUnique(cmdAllocInfo);
         Frames[i].MainCommandBuffer = std::move(commandBuffers.front());
     }
+
+    //immediate submits
+    ImmCommandPool = Device->createCommandPoolUnique(commandPoolInfo);
+    vk::CommandBufferAllocateInfo cmdAllocInfo(*ImmCommandPool, vk::CommandBufferLevel::ePrimary, 1);
+    auto commandBuffers = Device->allocateCommandBuffersUnique(cmdAllocInfo);
+    ImmCommandBuffer = std::move(commandBuffers.front());
 }
 
 void VkContext::init_sync_structures()
@@ -299,6 +334,8 @@ void VkContext::init_sync_structures()
         Frames[i].SwapchainSemaphore = Device->createSemaphoreUnique(semaphoreCreateInfo);
         Frames[i].RenderSemaphore = Device->createSemaphoreUnique(semaphoreCreateInfo);
     }
+
+    ImmFence = Device->createFenceUnique(fenceCreateInfo);
 }
 
 void VkContext::init_graphics_pipeline()
@@ -366,6 +403,14 @@ void VkContext::init_graphics_pipeline()
 
     // Pipeline layout
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo{};
+    
+    // Push constants
+    vk::PushConstantRange pushConstants{};
+    pushConstants.offset = 0;
+    pushConstants.size = sizeof(GPUDrawPushConstants);
+    pushConstants.stageFlags = vk::ShaderStageFlagBits::eVertex;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstants;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
     GraphicsPipelineLayout = Device->createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // Dynamic rendering pipeline
@@ -389,4 +434,80 @@ void VkContext::init_graphics_pipeline()
 
     auto pipelines = Device->createGraphicsPipelinesUnique(nullptr, pipelineInfo);
     GraphicsPipeline = std::move(pipelines.value.front());
+}
+GPUMeshBuffers VkContext::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+{
+    const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
+    const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+    GPUMeshBuffers newSurface;
+
+    //create vertex buffer
+    newSurface.vertexBuffer = Allocator.CreateBufferUnique(vertexBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+        VMA_MEMORY_USAGE_GPU_ONLY);
+
+    //find the adress of the vertex buffer
+    vk::BufferDeviceAddressInfo deviceAdressInfo(newSurface.vertexBuffer->buffer);
+    newSurface.vertexBufferAddress = Device->getBufferAddress(deviceAdressInfo);
+
+    //create index buffer
+    newSurface.indexBuffer = Allocator.CreateBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        VMA_MEMORY_USAGE_GPU_ONLY);
+
+    AllocatedBuffer staging = Allocator.CreateBuffer(vertexBufferSize + indexBufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+    void* data = staging.allocation->GetMappedData();
+
+    // copy vertex buffer
+    memcpy(data, vertices.data(), vertexBufferSize);
+    // copy index buffer
+    memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+
+    auto a = newSurface.vertexBuffer;
+
+    ImmediateSubmit([&](vk::CommandBuffer cmd) {
+        vk::BufferCopy vertexCopy{ 0 };
+        vertexCopy.dstOffset = 0;
+        vertexCopy.srcOffset = 0;
+        vertexCopy.size = vertexBufferSize;
+
+        cmd.copyBuffer(staging.buffer, newSurface.vertexBuffer->buffer, vertexCopy);
+
+        vk::BufferCopy indexCopy{ 0 };
+        indexCopy.dstOffset = 0;
+        indexCopy.srcOffset = vertexBufferSize;
+        indexCopy.size = indexBufferSize;
+
+        cmd.copyBuffer(staging.buffer, newSurface.indexBuffer->buffer, indexCopy);
+    });
+
+    vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
+
+    return newSurface;
+}
+
+void VkContext::ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function)
+{
+    vk::Device device = *Device;
+    vk::Queue graphicsQueue = GraphicsQueue;
+    vk::Fence immFence = *ImmFence;
+    vk::CommandBuffer immCommandBuffer = *ImmCommandBuffer;
+
+    device.resetFences(immFence);
+    immCommandBuffer.reset({});
+
+    immCommandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+    function(immCommandBuffer);
+
+    immCommandBuffer.end();
+
+    vk::CommandBufferSubmitInfo cmdInfo = vk::CommandBufferSubmitInfo(immCommandBuffer);
+    vk::SubmitInfo2 submit({}, nullptr, cmdInfo, nullptr);
+
+    // Submit command buffer to the queue and execute it.
+    // _renderFence will now block until the graphic commands finish execution
+    graphicsQueue.submit2(submit, immFence);
+
+    device.waitForFences(immFence, VK_TRUE, 9999999999);
+
 }

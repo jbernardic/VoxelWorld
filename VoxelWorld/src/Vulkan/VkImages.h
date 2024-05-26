@@ -1,70 +1,8 @@
 #pragma once
 #include "VkTypes.h"
 
-struct AllocatedImage
-{
-	// Move constructor
-	AllocatedImage(AllocatedImage&& t) noexcept
-		: image(t.image),
-		imageView(std::move(t.imageView)),
-		allocation(t.allocation),
-		imageExtent(t.imageExtent),
-		imageFormat(t.imageFormat)
-	{
-		t.image = nullptr;
-		t.allocation = nullptr;
-	}
-
-	// Default constructor
-	AllocatedImage() = default;
-
-	vk::Image image;
-	vk::UniqueImageView imageView;
-	VmaAllocation allocation;
-	vk::Extent3D imageExtent;
-	vk::Format imageFormat;
-};
-
-class UniqueVmaAllocator
-{
-public:
-	~UniqueVmaAllocator()
-	{
-		for (const auto& e : allocations)
-		{
-			vmaDestroyImage(ptr, e.image, e.allocation);
-		}
-		vmaDestroyAllocator(ptr);
-	}
-	void Set(VmaAllocator allocator)
-	{
-		this->ptr = allocator;
-	}
-	AllocatedImage* AddImage(AllocatedImage&& image)
-	{
-		allocations.push_back(std::move(image));
-		return &allocations[allocations.size() - 1];
-	}
-	VmaAllocator Get() const
-	{
-		return ptr;
-	}
-	VmaAllocator operator*()
-	{
-		return ptr;
-	}
-	VmaAllocator operator->()
-	{
-		return ptr;
-	}
-private:
-	VmaAllocator ptr;
-	std::vector<AllocatedImage> allocations;
-};
-
 namespace vk {
 	namespace tool {
-
 		inline void CopyImageToImage(vk::CommandBuffer cmd, vk::Image source, vk::Image destination, vk::Extent2D srcSize, vk::Extent2D dstSize)
 		{
 			vk::ImageBlit2 blitRegion;

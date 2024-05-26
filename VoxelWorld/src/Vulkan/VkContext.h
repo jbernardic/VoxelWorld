@@ -1,7 +1,5 @@
 #pragma once
 #include "VkTypes.h"
-#include "VkImages.h"
-#include <SDL.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -25,6 +23,8 @@ public:
 
     void Init(SDL_Window* window, uint32_t width, uint32_t height);
     void Draw();
+    void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
+    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
     AllocatedImage* DrawImage;
     vk::Extent2D DrawExtent;
@@ -43,6 +43,10 @@ public:
     FrameData Frames[FRAME_OVERLAP];
     uint32_t FrameNumber;
     vk::Queue GraphicsQueue;
+
+    vk::UniqueFence ImmFence;
+    vk::UniqueCommandPool ImmCommandPool;
+    vk::UniqueCommandBuffer ImmCommandBuffer;
     FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
 
 private:
