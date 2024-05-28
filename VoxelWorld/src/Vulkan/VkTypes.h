@@ -28,7 +28,6 @@ struct Vertex
 	float uv_x;
 	glm::vec3 normal;
 	float uv_y;
-	glm::vec4 color;
 };
 
 // holds the resources needed for a mesh
@@ -45,4 +44,13 @@ struct GPUDrawPushConstants
 {
 	glm::mat4 worldMatrix;
 	VkDeviceAddress vertexBuffer;
+};
+
+struct RenderMeshInfo
+{
+	uint32_t indexCount;
+	uint32_t firstIndex;
+	vk::Buffer indexBuffer;
+	VkDeviceAddress vertexBufferAddress;
+	glm::mat4 transform;
 };

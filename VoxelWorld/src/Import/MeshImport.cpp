@@ -1,7 +1,7 @@
-#include "GLTF.h"
+#include "MeshImport.h"
 #include <iostream>
 
-std::vector<std::shared_ptr<Mesh>> GLTF::LoadMeshes(std::filesystem::path filePath)
+std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path filePath)
 {
     std::cout << "Loading GLTF: " << filePath << std::endl;
 
@@ -33,7 +33,7 @@ std::vector<std::shared_ptr<Mesh>> GLTF::LoadMeshes(std::filesystem::path filePa
     std::vector<Vertex> vertices;
     for (fastgltf::Mesh& mesh : gltf.meshes)
     {
-        std::vector<GeoSurface> surfaces;
+        std::vector<MeshSurfaceInfo> surfaces;
 
         // clear the mesh arrays each mesh, we dont want to merge them by error
         indices.clear();
@@ -41,7 +41,7 @@ std::vector<std::shared_ptr<Mesh>> GLTF::LoadMeshes(std::filesystem::path filePa
 
         for (auto&& p : mesh.primitives)
         {
-            GeoSurface newSurface;
+            MeshSurfaceInfo newSurface;
             newSurface.startIndex = (uint32_t)indices.size();
             newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
 
@@ -68,7 +68,6 @@ std::vector<std::shared_ptr<Mesh>> GLTF::LoadMeshes(std::filesystem::path filePa
                     Vertex newvtx;
                     newvtx.position = v;
                     newvtx.normal = { 1, 0, 0 };
-                    newvtx.color = glm::vec4{ 1.f };
                     newvtx.uv_x = 0;
                     newvtx.uv_y = 0;
                     vertices[initial_vtx + index] = newvtx;
@@ -97,32 +96,11 @@ std::vector<std::shared_ptr<Mesh>> GLTF::LoadMeshes(std::filesystem::path filePa
                     vertices[initial_vtx + index].uv_y = v.y;
                 });
             }
-
-            // load vertex colors
-            auto colors = p.findAttribute("COLOR_0");
-            if (colors != p.attributes.end())
-            {
-
-                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).second],
-                    [&](glm::vec4 v, size_t index) {
-                    vertices[initial_vtx + index].color = v;
-                });
-            }
             surfaces.push_back(newSurface);
         }
 
-        // display the vertex normals
-        constexpr bool OverrideColors = false;
-        if (OverrideColors)
-        {
-            for (Vertex& vtx : vertices)
-            {
-                vtx.color = glm::vec4(vtx.normal, 1.f);
-            }
-        }
-
-        auto newmesh = std::make_shared<Mesh>(Application::Vulkan.UploadMesh(indices, vertices), std::string(mesh.name.c_str()), surfaces);
-        meshes.emplace_back(newmesh);
+        Mesh newmesh(Application::Vulkan.UploadMesh(indices, vertices), mesh.name.c_str(), surfaces);
+        meshes.emplace_back(std::make_shared<Mesh>(std::move(newmesh)));
     }
 
     return meshes;

@@ -1,7 +1,7 @@
 #include "VkContext.h"
 #include "VkDebug.h"
 #include "VkTools.h"
-#include "../Loaders/GLTF.h"
+#include "../Import/MeshImport.h"
 
 #include <stdexcept>
 #define VMA_IMPLEMENTATION
@@ -19,17 +19,13 @@ void VkContext::Init(SDL_Window* window, uint32_t width, uint32_t height)
     init_commands();
     init_sync_structures();
     init_graphics_pipeline();
-    init_default_data();
 }
 
 void VkContext::Draw()
 {
     Device->resetFences(*GetCurrentFrame().RenderFence);
     auto swapchainImageIndex = Device->acquireNextImageKHR(*Swapchain, 1000000000, *GetCurrentFrame().SwapchainSemaphore);
-    assert(swapchainImageIndex.result == vk::Result::eSuccess);
-
-    DrawExtent.width = DrawImage.imageExtent.width;
-    DrawExtent.height = DrawImage.imageExtent.height;
+    assert(swapchainImageIndex.result == vk::Result::eSuccess); //change later
 
     vk::CommandBuffer cmd = *GetCurrentFrame().MainCommandBuffer;
     cmd.reset();
@@ -99,7 +95,7 @@ void VkContext::init_vulkan()
     vk::InstanceCreateInfo instanceCreateInfo(vk::InstanceCreateFlags(), &appInfo, instanceLayerNames, instanceExtensionNames);
     Instance = vk::createInstanceUnique(instanceCreateInfo);
     DebugMessenger = vk::tool::CreateDebugMessenger(*Instance);
-    
+
     //Create Surface
     VkSurfaceKHR surface;
     if (!SDL_Vulkan_CreateSurface(sdl_window, VkInstance(*Instance), &surface))
@@ -170,7 +166,8 @@ void VkContext::init_swapchain()
 
     //Create DrawImage
     DrawImage.imageFormat = vk::Format::eR16G16B16A16Sfloat;
-    DrawImage.imageExtent = vk::Extent3D(w_width, w_height, 1);
+    DrawImage.imageExtent = vk::Extent3D(extent.width, extent.height, 1);
+    DrawExtent = extent;
 
     vk::ImageUsageFlags drawImageUsages{};
     drawImageUsages |= vk::ImageUsageFlagBits::eTransferSrc;
@@ -184,7 +181,7 @@ void VkContext::init_swapchain()
     rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    vmaCreateImage(*Allocator, &rimg_info, &rimg_allocinfo, (VkImage*) &DrawImage.image, &DrawImage.allocation, nullptr);
+    vmaCreateImage(*Allocator, &rimg_info, &rimg_allocinfo, (VkImage*)&DrawImage.image, &DrawImage.allocation, nullptr);
 
     DrawImage.imageView = Device->createImageViewUnique(vk::tool::ImageViewCreateInfo(DrawImage.imageFormat, DrawImage.image, vk::ImageAspectFlagBits::eColor));
     Allocator.RegisterImage(DrawImage);
@@ -200,7 +197,7 @@ void VkContext::create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfa
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eTransferSrc| vk::ImageUsageFlagBits::eTransferDst;
+    createInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
 
     //using single queue from Main queue family
     createInfo.imageSharingMode = vk::SharingMode::eExclusive;
@@ -267,32 +264,18 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
 
     cmd.setScissor(0, scissor);
 
-    GPUDrawPushConstants push_constants;
+    for (const auto& meshSurface : DrawContext.surfaces)
+    {
+        GPUDrawPushConstants push_constants;
+        push_constants.worldMatrix = meshSurface.transform;
+        push_constants.vertexBuffer = meshSurface.vertexBufferAddress;
 
-    glm::mat4 view = glm::translate(glm::vec3{ 0,3,-5 });
-    // camera projection
-    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)DrawExtent.width / (float)DrawExtent.height, 0.1f, 10000.0f);
-
-    // invert the Y direction on projection matrix so that we are more similar
-    // to opengl and gltf axis
-    projection[1][1] *= 1;
-
-    glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-    push_constants.worldMatrix = projection * view * model;
-
-    push_constants.vertexBuffer = testMeshes[0]->Buffers.vertexBufferAddress;
-    cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
-    cmd.bindIndexBuffer(testMeshes[0]->Buffers.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-    cmd.drawIndexed(testMeshes[0]->Surfaces[0].count, 1, testMeshes[0]->Surfaces[0].startIndex, 0, 0);
+        cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
+        cmd.bindIndexBuffer(meshSurface.indexBuffer, 0, vk::IndexType::eUint32);
+        cmd.drawIndexed(meshSurface.indexCount, 1, meshSurface.firstIndex, 0, 0);
+    }
 
     cmd.endRendering();
-}
-
-void VkContext::init_default_data()
-{
-    testMeshes = GLTF::LoadMeshes("res/skeleton.glb");
 }
 
 void VkContext::init_commands()
@@ -395,7 +378,7 @@ void VkContext::init_graphics_pipeline()
 
     // Pipeline layout
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo{};
-    
+
     // Push constants
     vk::PushConstantRange pushConstants{};
     pushConstants.offset = 0;

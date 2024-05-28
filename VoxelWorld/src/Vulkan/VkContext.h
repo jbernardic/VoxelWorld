@@ -1,6 +1,5 @@
 #pragma once
 #include "VkTypes.h"
-#include "../Renderer/Mesh.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -9,6 +8,11 @@ constexpr bool ENABLE_VALIDATION_LAYERS = false;
 #else
 constexpr bool ENABLE_VALIDATION_LAYERS = true;
 #endif
+
+struct DrawContext
+{
+    std::vector<RenderMeshInfo> surfaces;
+};
 
 class VkContext
 {
@@ -49,7 +53,7 @@ public:
     vk::UniqueCommandBuffer ImmCommandBuffer;
     AllocatedImage DrawImage;
     vk::Extent2D DrawExtent;
-    std::vector<std::shared_ptr<Mesh>> testMeshes;
+    DrawContext DrawContext;
     
 
 private:
@@ -64,5 +68,4 @@ private:
     void create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount);
     void draw_background(vk::CommandBuffer cmd);
     void draw_geometry(vk::CommandBuffer cmd);
-    void init_default_data();
 };
