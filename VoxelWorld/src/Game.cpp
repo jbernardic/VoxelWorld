@@ -8,9 +8,9 @@
 
 #define OGT_VOX_IMPLEMENTATION
 #include "ogt_vox.h"
-#include "Scene/Mesh.h"
-#include "Import/MeshImport.h"
+#include "Asset/MeshAsset.h"
 #include <glm/gtx/transform.hpp>
+#include "Scene/Scene.h"
 
 Game::Game()
 {
@@ -49,11 +49,11 @@ bool Game::Tick()
 	return !shouldQuit;
 }
 
-std::shared_ptr<Mesh> mesh;
+MeshAsset meshAsset;
+Scene scene;
 
 void Game::Init()
 {
-	mesh = Import::LoadMeshes("res/skeleton.glb")[0];
 	//checkerboard image
 	auto black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 1));
 	auto white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
@@ -66,30 +66,14 @@ void Game::Init()
 	textures.push_back({ *_testImage1.imageView, *Application::Vulkan.DefaultSampler });
 	textures.push_back({ *_testImage2.imageView, *Application::Vulkan.DefaultSampler });
 	Application::Vulkan.UpdateMeshTextures(textures);
+
+	meshAsset = Asset::LoadGLTFMeshes("res/skeleton.glb")[0];
+	scene.LoadMeshAssets({ meshAsset });
 }
 
 void Game::Draw()
 {
-	auto& ctx = Application::Vulkan.DrawContext;
-	ctx.surfaces.clear();
-	for (const auto& s : mesh->Surfaces)
-	{
-		RenderMeshInfo r;
-		r.firstIndex = s.firstIndex;
-		r.indexCount = s.indexCount;
-		r.indexBuffer = mesh->Buffers.indexBuffer.buffer;
-		r.vertexBufferAddress = mesh->Buffers.vertexBufferAddress;
-
-		glm::mat4 view = glm::translate(glm::vec3{ 0,3,-5 });
-		glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)Application::Vulkan.DrawExtent.width / (float)Application::Vulkan.DrawExtent.height, 0.1f, 10000.0f);
-		projection[1][1] *= 1;
-
-		glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-		r.transform = projection * view * model;
-		ctx.surfaces.emplace_back(r);
-	}
+	scene.Render();
 }
 
 

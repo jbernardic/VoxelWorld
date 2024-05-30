@@ -1,7 +1,7 @@
-#include "MeshImport.h"
+#include "MeshAsset.h"
 #include <iostream>
 
-std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path filePath)
+std::vector<MeshAsset> Asset::LoadGLTFMeshes(std::filesystem::path filePath)
 {
     std::cout << "Loading GLTF: " << filePath << std::endl;
 
@@ -25,7 +25,7 @@ std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path file
         return {};
     }
 
-    std::vector<std::shared_ptr<Mesh>> meshes;
+    std::vector<MeshAsset> meshes;
 
     // use the same vectors for all meshes so that the memory doesnt reallocate as often
 
@@ -33,7 +33,7 @@ std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path file
     std::vector<Vertex> vertices;
     for (fastgltf::Mesh& mesh : gltf.meshes)
     {
-        std::vector<MeshSurfaceInfo> surfaces;
+        std::vector<MeshAsset::Surface> surfaces;
 
         // clear the mesh arrays each mesh, we dont want to merge them by error
         indices.clear();
@@ -41,7 +41,7 @@ std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path file
 
         for (auto&& p : mesh.primitives)
         {
-            MeshSurfaceInfo newSurface;
+            MeshAsset::Surface newSurface;
             newSurface.firstIndex = (uint32_t)indices.size();
             newSurface.indexCount = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
 
@@ -98,9 +98,12 @@ std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path file
             }
             surfaces.push_back(newSurface);
         }
-
-        Mesh newmesh(Application::Vulkan.UploadMesh(indices, vertices), mesh.name.c_str(), surfaces);
-        meshes.emplace_back(std::make_shared<Mesh>(std::move(newmesh)));
+        MeshAsset meshAsset;
+        meshAsset.Indices = std::move(indices);
+        meshAsset.Vertices = std::move(vertices);
+        meshAsset.Surfaces = std::move(surfaces);
+        meshAsset.Name = std::move(mesh.name);
+        meshes.emplace_back(std::move(meshAsset));
     }
 
     return meshes;

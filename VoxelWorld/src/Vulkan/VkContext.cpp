@@ -1,7 +1,6 @@
 #include "VkContext.h"
 #include "VkDebug.h"
 #include "VkTools.h"
-#include "../Import/MeshImport.h"
 
 #include <stdexcept>
 #define VMA_IMPLEMENTATION
@@ -67,6 +66,7 @@ void VkContext::Draw()
 
     res = Device->waitForFences(*GetCurrentFrame().RenderFence, true, 1000000000); assert(res == vk::Result::eSuccess);
 
+    DrawContext.clear();
     FrameNumber++;
 }
 
@@ -526,7 +526,7 @@ void VkContext::init_samplers()
     DefaultSampler = Device->createSamplerUnique(samplerInfo);
 }
 
-GPUMeshBuffers VkContext::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+GPUMeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices)
 {
     const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);

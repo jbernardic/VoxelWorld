@@ -24,11 +24,17 @@ public:
 	{
 		for (const auto& e : images)
 		{
-			vmaDestroyImage(ptr, e.first, e.second);
+			if (e.first != VK_NULL_HANDLE)
+			{
+				vmaDestroyImage(ptr, e.first, e.second);
+			}
 		}
 		for (const auto& e : buffers)
 		{
-			vmaDestroyBuffer(ptr, e.first, e.second);
+			if (e.first != VK_NULL_HANDLE)
+			{
+				vmaDestroyBuffer(ptr, e.first, e.second);
+			}
 		}
 		vmaDestroyAllocator(ptr);
 	}
@@ -43,6 +49,14 @@ public:
 	void RegisterBuffer(AllocatedBuffer& buffer)
 	{
 		buffers.push_back({ buffer.buffer, buffer.allocation });
+	}
+	void DestroyBuffer(AllocatedBuffer& buffer)
+	{
+		vmaDestroyBuffer(ptr, buffer.buffer, buffer.allocation);
+	}
+	void DestroyImage(AllocatedImage& image)
+	{
+		vmaDestroyImage(ptr, image.image, image.allocation);
 	}
 	AllocatedBuffer CreateBuffer(size_t allocSize, vk::BufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 	{

@@ -13,6 +13,10 @@ constexpr bool ENABLE_VALIDATION_LAYERS = true;
 struct DrawContext
 {
     std::vector<RenderMeshInfo> surfaces;
+    void clear()
+    {
+        surfaces.clear();
+    }
 };
 
 class VkContext
@@ -31,7 +35,7 @@ public:
     void Draw();
     void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
     FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
-    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+    GPUMeshBuffers UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices);
     AllocatedImage UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
     void UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures);
 
@@ -79,6 +83,5 @@ private:
     void create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount);
     void draw_background(vk::CommandBuffer cmd);
     void draw_geometry(vk::CommandBuffer cmd);
-    void change_texture(vk::ImageView imageView, vk::Sampler sampler);
     AllocatedImage create_image(vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
 };
