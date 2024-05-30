@@ -7,6 +7,11 @@
 
 namespace vk {
     namespace tool {
+
+        constexpr VkPhysicalDeviceDescriptorIndexingFeatures DescriptorIndexing{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+            .descriptorBindingPartiallyBound = VK_TRUE
+        };
         constexpr VkPhysicalDeviceDynamicRenderingFeaturesKHR DynamicRenderingFeature{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
             .dynamicRendering = VK_TRUE,

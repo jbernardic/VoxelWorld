@@ -15,4 +15,6 @@ private:
 	void Init();
 	void Draw();
 	void Update(double deltaTime);
+	AllocatedImage _testImage1;
+	AllocatedImage _testImage2;
 };

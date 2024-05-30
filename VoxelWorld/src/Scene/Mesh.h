@@ -3,8 +3,9 @@
 
 struct MeshSurfaceInfo
 {
-    uint32_t startIndex;
-    uint32_t count;
+    uint32_t firstIndex;
+    uint32_t indexCount;
+
 };
 
 class Mesh

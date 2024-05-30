@@ -54,6 +54,18 @@ std::shared_ptr<Mesh> mesh;
 void Game::Init()
 {
 	mesh = Import::LoadMeshes("res/skeleton.glb")[0];
+	//checkerboard image
+	auto black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 1));
+	auto white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
+	_testImage1 = Application::Vulkan.UploadImage((void*)&black, VkExtent3D{1, 1, 1}, vk::Format::eR8G8B8A8Unorm,
+		vk::ImageUsageFlagBits::eSampled);
+	_testImage2 = Application::Vulkan.UploadImage((void*)&white, VkExtent3D{ 1, 1, 1 }, vk::Format::eR8G8B8A8Unorm,
+		vk::ImageUsageFlagBits::eSampled);
+
+	std::vector<std::pair<vk::ImageView, vk::Sampler>> textures;
+	textures.push_back({ *_testImage1.imageView, *Application::Vulkan.DefaultSampler });
+	textures.push_back({ *_testImage2.imageView, *Application::Vulkan.DefaultSampler });
+	Application::Vulkan.UpdateMeshTextures(textures);
 }
 
 void Game::Draw()
@@ -63,8 +75,8 @@ void Game::Draw()
 	for (const auto& s : mesh->Surfaces)
 	{
 		RenderMeshInfo r;
-		r.firstIndex = s.startIndex;
-		r.indexCount = s.count;
+		r.firstIndex = s.firstIndex;
+		r.indexCount = s.indexCount;
 		r.indexBuffer = mesh->Buffers.indexBuffer.buffer;
 		r.vertexBufferAddress = mesh->Buffers.vertexBufferAddress;
 

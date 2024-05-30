@@ -1,5 +1,4 @@
 #include "ResourceManager.h"
-#include <SDL_image.h>
 #include "Application.h"
 
 //void ResourceManager::LoadShader(std::string path, const char* name)

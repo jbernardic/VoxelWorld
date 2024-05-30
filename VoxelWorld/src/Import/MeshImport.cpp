@@ -42,8 +42,8 @@ std::vector<std::shared_ptr<Mesh>> Import::LoadMeshes(std::filesystem::path file
         for (auto&& p : mesh.primitives)
         {
             MeshSurfaceInfo newSurface;
-            newSurface.startIndex = (uint32_t)indices.size();
-            newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
+            newSurface.firstIndex = (uint32_t)indices.size();
+            newSurface.indexCount = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
 
             size_t initial_vtx = vertices.size();
 

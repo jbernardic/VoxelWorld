@@ -50,7 +50,10 @@ struct RenderMeshInfo
 {
 	uint32_t indexCount;
 	uint32_t firstIndex;
+	
 	vk::Buffer indexBuffer;
 	VkDeviceAddress vertexBufferAddress;
+
 	glm::mat4 transform;
+
 };

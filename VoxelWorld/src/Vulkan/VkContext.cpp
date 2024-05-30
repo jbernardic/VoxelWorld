@@ -18,7 +18,9 @@ void VkContext::Init(SDL_Window* window, uint32_t width, uint32_t height)
     init_swapchain();
     init_commands();
     init_sync_structures();
+    init_descriptors();
     init_graphics_pipeline();
+    init_samplers();
 }
 
 void VkContext::Draw()
@@ -67,6 +69,15 @@ void VkContext::Draw()
 
     FrameNumber++;
 }
+
+//void VkContext::CleanUp()
+//{
+//    
+//    //Device->destroyDescriptorPool(DescriptorPool);
+//    //Device->destroyDescriptorSetLayout(TextureDescriptorLayout);
+//
+//    //vk::DescriptorSetLayout TextureDescriptorLayout;
+//}
 
 void VkContext::init_vulkan()
 {
@@ -118,8 +129,10 @@ void VkContext::init_vulkan()
     auto dynamicRendering = vk::tool::DynamicRenderingFeature;
     auto sync2 = vk::tool::Sync2Feature;
     auto bufferDeviceAddress = vk::tool::BufferDeviceAddressFeatures;
+    auto descriptorIndexing = vk::tool::DescriptorIndexing;
     dynamicRendering.pNext = &sync2;
     sync2.pNext = &bufferDeviceAddress;
+    bufferDeviceAddress.pNext = &descriptorIndexing;
 
     //Create Logic device
     vk::DeviceCreateInfo deviceCreateInfo{};
@@ -146,7 +159,8 @@ void VkContext::init_vulkan()
     allocatorInfo.instance = *Instance;
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &allocator);
-    Allocator.Set(allocator);
+    Allocator.Set(allocator);    void BuildGraphicsPipeline();
+
 }
 
 void VkContext::init_swapchain()
@@ -270,12 +284,47 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
         push_constants.worldMatrix = meshSurface.transform;
         push_constants.vertexBuffer = meshSurface.vertexBufferAddress;
 
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *GraphicsPipelineLayout, 0, MeshDescriptorSet, nullptr);
         cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
         cmd.bindIndexBuffer(meshSurface.indexBuffer, 0, vk::IndexType::eUint32);
         cmd.drawIndexed(meshSurface.indexCount, 1, meshSurface.firstIndex, 0, 0);
     }
 
     cmd.endRendering();
+}
+
+AllocatedImage VkContext::create_image(vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
+{
+    AllocatedImage newImage;
+    newImage.imageFormat = format;
+    newImage.imageExtent = size;
+
+    vk::ImageCreateInfo img_info = vk::tool::ImageCreateInfo(format, usage, size);
+
+    // always allocate images on dedicated GPU memory
+    VmaAllocationCreateInfo allocinfo = {};
+    allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    // allocate and create the image
+    vmaCreateImage(*Allocator, (VkImageCreateInfo*) & img_info, &allocinfo, (VkImage*) & newImage.image, &newImage.allocation, nullptr);
+
+    // if the format is a depth format, we will need to have it use the correct
+    // aspect flag
+    vk::ImageAspectFlags aspectFlag = vk::ImageAspectFlagBits::eColor;
+    if (format == vk::Format::eD32Sfloat)
+    {
+        aspectFlag = vk::ImageAspectFlagBits::eDepth;
+    }
+
+    // build a image-view for the image
+    vk::ImageViewCreateInfo view_info = vk::tool::ImageViewCreateInfo(format, newImage.image, aspectFlag);
+    view_info.subresourceRange.levelCount = img_info.mipLevels;
+
+    newImage.imageView = Device->createImageViewUnique(view_info);
+    Allocator.RegisterImage(newImage);
+
+    return newImage;
 }
 
 void VkContext::init_commands()
@@ -386,6 +435,10 @@ void VkContext::init_graphics_pipeline()
     pushConstants.stageFlags = vk::ShaderStageFlagBits::eVertex;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstants;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
+
+    //Descriptors
+    pipelineLayoutInfo.setSetLayouts(*MeshDescriptorSetLayout);
+
     GraphicsPipelineLayout = Device->createPipelineLayoutUnique(pipelineLayoutInfo);
 
     // Dynamic rendering pipeline
@@ -410,6 +463,69 @@ void VkContext::init_graphics_pipeline()
     auto pipelines = Device->createGraphicsPipelinesUnique(nullptr, pipelineInfo);
     GraphicsPipeline = std::move(pipelines.value.front());
 }
+void VkContext::init_descriptors()
+{
+    //using only one descriptor set currenlty
+    vk::DescriptorPoolSize descPoolSize;
+    descPoolSize.setDescriptorCount(MAX_TEXTURE_COUNT);
+    descPoolSize.setType(vk::DescriptorType::eCombinedImageSampler);
+
+    vk::DescriptorPoolCreateInfo descPoolInfo;
+    descPoolInfo.setPoolSizeCount(1)
+        .setPoolSizes(descPoolSize)
+        .setMaxSets(1);
+    DescriptorPool = Device->createDescriptorPoolUnique(descPoolInfo);
+
+    //Layout binding
+    vk::DescriptorSetLayoutBinding textureLayoutBinding;
+    textureLayoutBinding.binding = 0;
+    textureLayoutBinding.descriptorCount = descPoolSize.descriptorCount;
+    textureLayoutBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    textureLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+    textureLayoutBinding.pImmutableSamplers = nullptr;
+
+    vk::DescriptorSetLayoutBindingFlagsCreateInfo bindingFlags;
+    bindingFlags.bindingCount = 1;
+    vk::DescriptorBindingFlags f = vk::DescriptorBindingFlagBits::ePartiallyBound; //0
+    bindingFlags.pBindingFlags = &f;
+
+    vk::DescriptorSetLayoutCreateInfo layoutInfo;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &textureLayoutBinding;
+    layoutInfo.pNext = &bindingFlags;
+    
+    MeshDescriptorSetLayout = Device->createDescriptorSetLayoutUnique(layoutInfo);
+
+    vk::DescriptorSetAllocateInfo allocInfo{};
+    allocInfo.descriptorPool = *DescriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &*MeshDescriptorSetLayout;
+    
+    MeshDescriptorSet = Device->allocateDescriptorSets(allocInfo)[0];
+
+}
+
+void VkContext::init_samplers()
+{
+    vk::SamplerCreateInfo samplerInfo = {};
+    samplerInfo.magFilter = vk::Filter::eLinear;
+    samplerInfo.minFilter = vk::Filter::eLinear;
+    samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.maxAnisotropy = 16;
+    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = vk::CompareOp::eAlways;
+    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+    DefaultSampler = Device->createSamplerUnique(samplerInfo);
+}
+
 GPUMeshBuffers VkContext::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
 {
     const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
@@ -483,6 +599,69 @@ void VkContext::ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& fun
     // _renderFence will now block until the graphic commands finish execution
     graphicsQueue.submit2(submit, immFence);
 
-    device.waitForFences(immFence, VK_TRUE, 9999999999);
+    auto res = device.waitForFences(immFence, VK_TRUE, 9999999999);
+    if (res != vk::Result::eSuccess)
+    {
+        std::cout << "vk::Device::waitForFences failed!" << std::endl;
+    }
 
+}
+
+AllocatedImage VkContext::UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
+{
+    size_t data_size = size.depth * size.width * size.height * 4;
+    AllocatedBuffer uploadbuffer = Allocator.CreateBuffer(data_size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    memcpy(uploadbuffer.info.pMappedData, data, data_size);
+
+    AllocatedImage new_image = create_image(size, format, usage | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc);
+
+    ImmediateSubmit([&](VkCommandBuffer cmd) {
+        vk::tool::TransitionImage(cmd, new_image.image, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+
+        VkBufferImageCopy copyRegion = {};
+        copyRegion.bufferOffset = 0;
+        copyRegion.bufferRowLength = 0;
+        copyRegion.bufferImageHeight = 0;
+
+        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.imageSubresource.mipLevel = 0;
+        copyRegion.imageSubresource.baseArrayLayer = 0;
+        copyRegion.imageSubresource.layerCount = 1;
+        copyRegion.imageExtent = size;
+
+        // copy the buffer into the image
+        vkCmdCopyBufferToImage(cmd, uploadbuffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+            &copyRegion);
+
+        vk::tool::TransitionImage(cmd, new_image.image, vk::ImageLayout::eTransferDstOptimal,
+            vk::ImageLayout::eShaderReadOnlyOptimal);
+    });
+    vmaDestroyBuffer(*Allocator, uploadbuffer.buffer, uploadbuffer.allocation);
+    return new_image;
+}
+
+void VkContext::UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures)
+{
+    if (textures.size() > MAX_TEXTURE_COUNT)
+    {
+        throw std::runtime_error("Texture count should not exceed " + MAX_TEXTURE_COUNT);
+    }
+    std::vector<vk::DescriptorImageInfo> descriptorImageInfos(textures.size());
+    for (int i = 0; i < textures.size(); i++)
+    {
+        descriptorImageInfos[i].imageView = textures[i].first;
+        descriptorImageInfos[i].sampler = textures[i].second;
+        descriptorImageInfos[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    }
+
+    vk::WriteDescriptorSet descriptorWrite{};
+    descriptorWrite.dstSet = MeshDescriptorSet;
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    descriptorWrite.descriptorCount = textures.size();
+    descriptorWrite.pImageInfo = descriptorImageInfos.data();
+
+    Device->updateDescriptorSets(descriptorWrite, nullptr);
 }

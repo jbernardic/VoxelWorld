@@ -2,6 +2,7 @@
 #include "VkTypes.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr unsigned int MAX_TEXTURE_COUNT = 1000;
 
 #ifdef NDEBUG
 constexpr bool ENABLE_VALIDATION_LAYERS = false;
@@ -31,11 +32,14 @@ public:
     void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
     FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+    AllocatedImage UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
+    void UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures);
 
     vk::UniqueInstance Instance;
     vk::UniqueDebugUtilsMessengerEXT DebugMessenger;
     vk::PhysicalDevice PhysicalDevice;
     vk::UniqueDevice Device;
+    UniqueVmaAllocator Allocator;
     vk::UniqueSurfaceKHR Surface;
     vk::UniqueSwapchainKHR Swapchain;
     vk::SwapchainCreateInfoKHR SwapchainInfo;
@@ -43,7 +47,7 @@ public:
     std::vector<vk::UniqueImageView> SwapchainImageViews;
     vk::UniquePipelineLayout GraphicsPipelineLayout;
     vk::UniquePipeline GraphicsPipeline;
-    UniqueVmaAllocator Allocator;
+
     FrameData Frames[FRAME_OVERLAP];
     uint32_t FrameNumber;
     vk::Queue GraphicsQueue;
@@ -55,6 +59,11 @@ public:
     vk::Extent2D DrawExtent;
     DrawContext DrawContext;
     
+    vk::UniqueSampler DefaultSampler;
+
+    vk::UniqueDescriptorPool DescriptorPool;
+    vk::DescriptorSet MeshDescriptorSet;
+    vk::UniqueDescriptorSetLayout MeshDescriptorSetLayout;
 
 private:
     SDL_Window* sdl_window;
@@ -65,7 +74,11 @@ private:
     void init_commands();
     void init_sync_structures();
     void init_graphics_pipeline();
+    void init_descriptors();
+    void init_samplers();
     void create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount);
     void draw_background(vk::CommandBuffer cmd);
     void draw_geometry(vk::CommandBuffer cmd);
+    void change_texture(vk::ImageView imageView, vk::Sampler sampler);
+    AllocatedImage create_image(vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
 };

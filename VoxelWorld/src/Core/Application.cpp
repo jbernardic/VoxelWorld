@@ -22,7 +22,6 @@ void Application::Create()
         W_HEIGHT,
         SDL_WINDOW_VULKAN
     );
-
     Vulkan.Init(SDLWindow, W_WIDTH, W_HEIGHT);
 }
 
