@@ -7,7 +7,12 @@
 
 namespace vk {
     namespace tool {
-
+        const VkValidationFeatureEnableEXT _validationEnables[] = { VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT };
+        constexpr VkValidationFeaturesEXT ValidationFeatures{
+            .sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+            .enabledValidationFeatureCount = 1,
+            .pEnabledValidationFeatures = _validationEnables
+        };
         constexpr VkPhysicalDeviceDescriptorIndexingFeatures DescriptorIndexing{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
             .descriptorBindingPartiallyBound = VK_TRUE

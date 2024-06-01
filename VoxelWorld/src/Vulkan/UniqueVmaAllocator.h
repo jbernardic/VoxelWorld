@@ -50,11 +50,11 @@ public:
 	{
 		buffers.push_back({ buffer.buffer, buffer.allocation });
 	}
-	void DestroyBuffer(AllocatedBuffer& buffer)
+	void DestroyBuffer(const AllocatedBuffer& buffer)
 	{
 		vmaDestroyBuffer(ptr, buffer.buffer, buffer.allocation);
 	}
-	void DestroyImage(AllocatedImage& image)
+	void DestroyImage(const AllocatedImage& image)
 	{
 		vmaDestroyImage(ptr, image.image, image.allocation);
 	}

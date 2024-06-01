@@ -1,20 +1,19 @@
 #pragma once
 #include <iostream>
-#include "../Asset/MeshAsset.h"
+#include "../Asset/ModelAsset.h"
 
 struct MeshReference
 {
-	std::string name;
 	RenderMeshInfo meshInfo;
-	GPUMeshBuffers meshBuffers;
+	MeshBuffers meshBuffers;
 };
 
 class Scene
 {
 public:
-	void LoadMeshAssets(const std::vector<MeshAsset>& meshAssets);
-	void DestroyMesh(const char* name);
+	std::vector<std::list<MeshReference>::iterator> LoadModel(const ModelAsset& meshAsset);
+	void DestroyMesh(std::list<MeshReference>::iterator it);
 	void Render();
 private:
-	std::unordered_map<std::string, MeshReference> loadedMeshes;
+	std::list<MeshReference> loadedMeshes;
 };

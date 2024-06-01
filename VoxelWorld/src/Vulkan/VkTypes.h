@@ -30,20 +30,30 @@ struct Vertex
 	float uv_y;
 };
 
+struct VertexBone
+{
+	glm::vec4 joint;
+	glm::vec4 weight;
+};
+
 // holds the resources needed for a mesh
-struct GPUMeshBuffers
+struct MeshBuffers
 {
 
 	AllocatedBuffer indexBuffer;
 	AllocatedBuffer vertexBuffer;
+	AllocatedBuffer vertexBoneBuffer;
 	VkDeviceAddress vertexBufferAddress;
+	VkDeviceAddress vertexBoneBufferAddress;
 };
 
 // push constants for our mesh object draws
-struct GPUDrawPushConstants
+struct MeshPushConstants
 {
 	glm::mat4 worldMatrix;
 	VkDeviceAddress vertexBuffer;
+	VkDeviceAddress vertexBoneBuffer;
+	VkDeviceAddress jointMatrixBuffer;
 };
 
 struct RenderMeshInfo
@@ -52,8 +62,5 @@ struct RenderMeshInfo
 	uint32_t firstIndex;
 	
 	vk::Buffer indexBuffer;
-	VkDeviceAddress vertexBufferAddress;
-
-	glm::mat4 transform;
-
+	MeshPushConstants pushConstants;
 };

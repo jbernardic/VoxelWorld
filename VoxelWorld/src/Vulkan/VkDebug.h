@@ -61,6 +61,12 @@ namespace vk {
                     }
                 }
             }
+
+            if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+            {
+                message = pCallbackData->pMessage;
+            }
+
             std::cout << message << std::endl;
             return false;
         }

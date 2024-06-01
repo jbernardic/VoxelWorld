@@ -104,6 +104,7 @@ void VkContext::init_vulkan()
     vk::tool::CheckLayers(instanceLayerNames, vk::enumerateInstanceLayerProperties());
 
     vk::InstanceCreateInfo instanceCreateInfo(vk::InstanceCreateFlags(), &appInfo, instanceLayerNames, instanceExtensionNames);
+    instanceCreateInfo.pNext = &vk::tool::ValidationFeatures;
     Instance = vk::createInstanceUnique(instanceCreateInfo);
     DebugMessenger = vk::tool::CreateDebugMessenger(*Instance);
 
@@ -130,6 +131,7 @@ void VkContext::init_vulkan()
     auto sync2 = vk::tool::Sync2Feature;
     auto bufferDeviceAddress = vk::tool::BufferDeviceAddressFeatures;
     auto descriptorIndexing = vk::tool::DescriptorIndexing;
+    auto validationFeatures = vk::tool::ValidationFeatures;
     dynamicRendering.pNext = &sync2;
     sync2.pNext = &bufferDeviceAddress;
     bufferDeviceAddress.pNext = &descriptorIndexing;
@@ -143,7 +145,8 @@ void VkContext::init_vulkan()
     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
     //Device extensions
-    std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME };
+    std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, 
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME };
     vk::tool::CheckExtensions(PhysicalDevice.enumerateDeviceExtensionProperties(), deviceExtensions);
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
@@ -278,16 +281,12 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
 
     cmd.setScissor(0, scissor);
 
-    for (const auto& meshSurface : DrawContext.surfaces)
+    for (const auto& mesh : DrawContext.meshes)
     {
-        GPUDrawPushConstants push_constants;
-        push_constants.worldMatrix = meshSurface.transform;
-        push_constants.vertexBuffer = meshSurface.vertexBufferAddress;
-
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *GraphicsPipelineLayout, 0, MeshDescriptorSet, nullptr);
-        cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(GPUDrawPushConstants), &push_constants);
-        cmd.bindIndexBuffer(meshSurface.indexBuffer, 0, vk::IndexType::eUint32);
-        cmd.drawIndexed(meshSurface.indexCount, 1, meshSurface.firstIndex, 0, 0);
+        cmd.pushConstants(*GraphicsPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(MeshPushConstants), &mesh.pushConstants);
+        cmd.bindIndexBuffer(mesh.indexBuffer, 0, vk::IndexType::eUint32);
+        cmd.drawIndexed(mesh.indexCount, 1, mesh.firstIndex, 0, 0);
     }
 
     cmd.endRendering();
@@ -431,7 +430,7 @@ void VkContext::init_graphics_pipeline()
     // Push constants
     vk::PushConstantRange pushConstants{};
     pushConstants.offset = 0;
-    pushConstants.size = sizeof(GPUDrawPushConstants);
+    pushConstants.size = sizeof(MeshPushConstants);
     pushConstants.stageFlags = vk::ShaderStageFlagBits::eVertex;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstants;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
@@ -526,34 +525,56 @@ void VkContext::init_samplers()
     DefaultSampler = Device->createSamplerUnique(samplerInfo);
 }
 
-GPUMeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices)
+std::pair<AllocatedBuffer, VkDeviceAddress> VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
 {
+    const size_t size = mats.size() * sizeof(glm::mat4);
+    AllocatedBuffer buffer = Allocator.CreateBufferUnique(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+        VMA_MEMORY_USAGE_GPU_ONLY);
+    VkDeviceAddress address = Device->getBufferAddress(vk::BufferDeviceAddressInfo(buffer.buffer));
+    AllocatedBuffer staging = Allocator.CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+    void* data = staging.allocation->GetMappedData();
+    memcpy(data, mats.data(), size);
+    ImmediateSubmit([&](vk::CommandBuffer cmd) {
+        vk::BufferCopy copy{ 0 };
+        copy.dstOffset = 0;
+        copy.srcOffset = 0;
+        copy.size = size;
+
+        cmd.copyBuffer(staging.buffer, buffer.buffer, copy);
+    });
+    vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
+    return std::make_pair(buffer, address);
+}
+
+MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<VertexBone>& bones)
+{
+    const size_t vertexBoneBufferSize = bones.size() * sizeof(VertexBone);
     const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
-    GPUMeshBuffers newSurface;
+    MeshBuffers newSurface;
 
     //create vertex buffer
     newSurface.vertexBuffer = Allocator.CreateBufferUnique(vertexBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    //find the adress of the vertex buffer
-    vk::BufferDeviceAddressInfo deviceAdressInfo(newSurface.vertexBuffer.buffer);
-    newSurface.vertexBufferAddress = Device->getBufferAddress(deviceAdressInfo);
+    newSurface.vertexBoneBuffer = Allocator.CreateBufferUnique(vertexBoneBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+        VMA_MEMORY_USAGE_GPU_ONLY);
 
+    //find the adress of the vertex buffer
+    newSurface.vertexBufferAddress = Device->getBufferAddress(vk::BufferDeviceAddressInfo(newSurface.vertexBuffer.buffer));
+    newSurface.vertexBoneBufferAddress = Device->getBufferAddress(vk::BufferDeviceAddressInfo(newSurface.vertexBoneBuffer.buffer));
     //create index buffer
     newSurface.indexBuffer = Allocator.CreateBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    AllocatedBuffer staging = Allocator.CreateBuffer(vertexBufferSize + indexBufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+    AllocatedBuffer staging = Allocator.CreateBuffer(vertexBufferSize + indexBufferSize + vertexBoneBufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
     void* data = staging.allocation->GetMappedData();
 
-    // copy vertex buffer
     memcpy(data, vertices.data(), vertexBufferSize);
-    // copy index buffer
     memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+    memcpy((char*)data + vertexBufferSize + indexBufferSize, bones.data(), vertexBoneBufferSize);
 
-    auto a = newSurface.vertexBuffer;
 
     ImmediateSubmit([&](vk::CommandBuffer cmd) {
         vk::BufferCopy vertexCopy{ 0 };
@@ -569,6 +590,13 @@ GPUMeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const
         indexCopy.size = indexBufferSize;
 
         cmd.copyBuffer(staging.buffer, newSurface.indexBuffer.buffer, indexCopy);
+
+        vk::BufferCopy boneCopy{ 0 };
+        boneCopy.dstOffset = 0;
+        boneCopy.srcOffset = vertexBufferSize + indexBufferSize;
+        boneCopy.size = vertexBoneBufferSize;
+
+        cmd.copyBuffer(staging.buffer, newSurface.vertexBoneBuffer.buffer, boneCopy);
     });
 
     vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);

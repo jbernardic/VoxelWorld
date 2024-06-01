@@ -8,7 +8,7 @@
 
 #define OGT_VOX_IMPLEMENTATION
 #include "ogt_vox.h"
-#include "Asset/MeshAsset.h"
+#include "Asset/ModelAsset.h"
 #include <glm/gtx/transform.hpp>
 #include "Scene/Scene.h"
 
@@ -49,7 +49,7 @@ bool Game::Tick()
 	return !shouldQuit;
 }
 
-MeshAsset meshAsset;
+ModelAsset modelAsset;
 Scene scene;
 
 void Game::Init()
@@ -67,8 +67,8 @@ void Game::Init()
 	textures.push_back({ *_testImage2.imageView, *Application::Vulkan.DefaultSampler });
 	Application::Vulkan.UpdateMeshTextures(textures);
 
-	meshAsset = Asset::LoadGLTFMeshes("res/skeleton.glb")[0];
-	scene.LoadMeshAssets({ meshAsset });
+	modelAsset = Asset::LoadModelGLTF("res/untitled.glb");
+	scene.LoadModel(modelAsset);
 }
 
 void Game::Draw()
