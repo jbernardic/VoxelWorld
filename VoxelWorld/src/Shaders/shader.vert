@@ -33,6 +33,7 @@ layout(buffer_reference, std430) readonly buffer JointMatrixBuffer{
 layout( push_constant ) uniform constants
 {	
 	mat4 render_matrix;
+	float useSkeleton;
 	VertexBuffer vertexBuffer;
 	VertexBoneBuffer vertexBoneBuffer;
 	JointMatrixBuffer jointMatrixBuffer;
@@ -44,15 +45,19 @@ void main()
 
 	VertexBone bone = PushConstants.vertexBoneBuffer.bones[gl_VertexIndex];
 
-	mat4 skinMat =
-    bone.weight.x * PushConstants.jointMatrixBuffer.joints[int(bone.joint.x)] +
-    bone.weight.y * PushConstants.jointMatrixBuffer.joints[int(bone.joint.y)] +
-    bone.weight.z * PushConstants.jointMatrixBuffer.joints[int(bone.joint.z)] +
-    bone.weight.w * PushConstants.jointMatrixBuffer.joints[int(bone.joint.w)];
-
-	vec4 position = skinMat * vec4(v.position, 1.0f);
-	gl_Position = PushConstants.render_matrix * position;
+	vec4 position = vec4(v.position, 1.0f);
 	
+	if(PushConstants.useSkeleton > 0)
+	{
+		mat4 skinMat =
+		bone.weight.x * PushConstants.jointMatrixBuffer.joints[int(bone.joint.x)] +
+		bone.weight.y * PushConstants.jointMatrixBuffer.joints[int(bone.joint.y)] +
+		bone.weight.z * PushConstants.jointMatrixBuffer.joints[int(bone.joint.z)] +
+		bone.weight.w * PushConstants.jointMatrixBuffer.joints[int(bone.joint.w)];	
+		position = skinMat * position;
+	}
+
+	gl_Position = PushConstants.render_matrix * position;
 
 	outColor = vec3(1.0);
 	outUV.x = v.uv_x;

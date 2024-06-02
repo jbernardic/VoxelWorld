@@ -38,4 +38,5 @@ public:
 	void Render(const Camera& camera);
 private:
 	std::list<Model> models;
+	std::vector<std::pair<vk::ImageView, vk::Sampler>> textures;
 };

@@ -2,7 +2,8 @@
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
-
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 static glm::mat4 convertTransform(std::variant<fastgltf::TRS, fastgltf::Node::TransformMatrix> variant)
 {
@@ -44,13 +45,97 @@ static void processSkeletonNode(ModelAsset::Node& current, std::unordered_map<in
     }
 }
 
+static std::unique_ptr<ModelAsset::Image> loadImage(fastgltf::Asset& asset, fastgltf::Image& image)
+{
+    std::unique_ptr<ModelAsset::Image> imageAsset;
+    int width, height, nrChannels;
+
+    std::visit(
+        fastgltf::visitor {
+            [](auto& arg) {},
+            [&](fastgltf::sources::URI& filePath) {
+                assert(filePath.fileByteOffset == 0); // We don't support offsets with stbi.
+                assert(filePath.uri.isLocalPath()); // We're only capable of loading
+                                                    // local files.
+
+                const std::string path(filePath.uri.path().begin(),
+                    filePath.uri.path().end()); // Thanks C++.
+                unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrChannels, 4);
+                if (data) {
+                    VkExtent3D imagesize;
+                    imagesize.width = width;
+                    imagesize.height = height;
+                    imagesize.depth = 1;
+
+                    imageAsset = std::make_unique<ModelAsset::Image>(data, vk::Format::eR8G8B8A8Unorm, imagesize);
+                }
+            },
+            [&](fastgltf::sources::Array& arr) {
+                unsigned char* data = stbi_load_from_memory(arr.bytes.data(), static_cast<int>(arr.bytes.size()),
+                    &width, &height, &nrChannels, 4);
+                if (data) {
+                    VkExtent3D imagesize;
+                    imagesize.width = width;
+                    imagesize.height = height;
+                    imagesize.depth = 1;
+
+                    imageAsset = std::make_unique<ModelAsset::Image>(data, vk::Format::eR8G8B8A8Unorm, imagesize);
+                }
+            },
+            [&](fastgltf::sources::BufferView& view) {
+                auto& bufferView = asset.bufferViews[view.bufferViewIndex];
+                auto& buffer = asset.buffers[bufferView.bufferIndex];
+                std::visit(fastgltf::visitor {
+                               [](auto& arg) {},
+                               [&](fastgltf::sources::Array& arr) {
+                                    auto a = arr.bytes.data();
+                                    for (int i = 0; i < arr.bytes.size(); i++)
+                                    {
+                                        int a = arr.bytes.data()[i];
+                                    }
+                                    unsigned char* data = stbi_load_from_memory(arr.bytes.data() + bufferView.byteOffset, static_cast<int>(arr.bytes.size()),
+                                        &width, &height, &nrChannels, 4);
+                                    if (data) {
+                                        VkExtent3D imagesize;
+                                        imagesize.width = width;
+                                        imagesize.height = height;
+                                        imagesize.depth = 1;
+
+                                        imageAsset = std::make_unique<ModelAsset::Image>(data, vk::Format::eR8G8B8A8Unorm, imagesize);
+                                    }
+                               } },
+                    buffer.data);
+            },
+        },
+        image.data);
+    
+    if (!imageAsset)
+    {
+        imageAsset = std::make_unique<ModelAsset::Image>();
+        imageAsset->size = vk::Extent3D(1, 1, 1);
+        imageAsset->format = vk::Format::eR8G8B8A8Unorm;
+        imageAsset->data = (unsigned char*) & ModelAsset::ErrorColor;
+        imageAsset->error = true;
+    }
+
+    return imageAsset;
+}
+
 
 ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
 {
     std::cout << "Loading GLTF: " << filePath << std::endl;
 
     fastgltf::GltfDataBuffer data;
-    data.loadFromFile(filePath);
+    try
+    {
+        data.loadFromFile(filePath);
+    }
+    catch (...)
+    {
+        throw std::runtime_error("Couldn't load: " + filePath.string());
+    }
+    
 
     constexpr auto gltfOptions = fastgltf::Options::LoadGLBBuffers
         | fastgltf::Options::LoadExternalBuffers;
@@ -110,6 +195,13 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
             auto& node = skeletonNodes[index++];
             node.inverseBindMatrix = mat;
         });
+    }
+    auto a = gltf.textures;
+    // load all textures
+    for (fastgltf::Image& image : gltf.images)
+    {
+        std::unique_ptr<ModelAsset::Image> img = loadImage(gltf, image);
+        asset.Textures.push_back(std::move(img));
     }
 
     for (auto& mesh : gltf.meshes)
@@ -209,4 +301,10 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
     asset.Skeleton = std::move(skeletonNodes);
 
     return asset;
+}
+
+ModelAsset::Image::~Image()
+{
+    if(!error)
+        stbi_image_free(data);
 }

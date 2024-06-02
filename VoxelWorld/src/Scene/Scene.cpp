@@ -5,22 +5,35 @@
 std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 {
 	Model model;
-
-	//initialize joint matrices
-	std::vector<glm::mat4> jointMatrices;
-	jointMatrices.reserve(modelAsset.Skeleton.size());
-
-	for (const auto& bone : modelAsset.Skeleton)
+	AllocatedBuffer joints;
+	if (!modelAsset.Skeleton.empty())
 	{
-		SkeletonJoint joint;
-		joint.children = bone.children;
-		joint.inverseBindMatrix = bone.inverseBindMatrix;
-		joint.parent = bone.parent;
-		joint.transform = Math::Transform(bone.localTransform);
-		model.skeleton.joints.push_back(joint);
-		jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
+		//initialize joint matrices
+		std::vector<glm::mat4> jointMatrices;
+		jointMatrices.reserve(modelAsset.Skeleton.size());
+
+		for (const auto& bone : modelAsset.Skeleton)
+		{
+			SkeletonJoint joint;
+			joint.children = bone.children;
+			joint.inverseBindMatrix = bone.inverseBindMatrix;
+			joint.parent = bone.parent;
+			joint.transform = Math::Transform(bone.localTransform);
+			model.skeleton.joints.push_back(joint);
+			jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
+		}
+		joints = Application::Vulkan.UploadJointMatrices(jointMatrices);
 	}
-	const auto& joints = Application::Vulkan.UploadJointMatrices(jointMatrices);
+
+	//upload textures
+	if (modelAsset.Textures.size() > 0)
+	{
+		auto texture = Application::Vulkan.UploadImage(modelAsset.Textures[0]->data, modelAsset.Textures[0]->size, modelAsset.Textures[0]->format,
+			vk::ImageUsageFlagBits::eSampled);
+
+		textures.push_back({ *texture.imageView, *Application::Vulkan.DefaultSampler });
+		Application::Vulkan.UpdateMeshTextures(textures);
+	}
 
 	for (const auto& meshAsset : modelAsset.Meshes)
 	{
@@ -33,7 +46,9 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 			meshInfo.indexCount = surface.indexCount;
 			meshInfo.indexBuffer = mesh.buffers.indexBuffer.buffer;
 
-			meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(joints);
+			if(!modelAsset.Skeleton.empty())
+				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(joints);
+			meshInfo.pushConstants.useSkeleton = modelAsset.Skeleton.size();
 			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(mesh.buffers.vertexBuffer);
 			meshInfo.pushConstants.vertexBoneBuffer = Application::Vulkan.GetBufferAddress(mesh.buffers.vertexBoneBuffer);
 			mesh.surfaces.push_back(std::move(meshInfo));

@@ -57,20 +57,7 @@ bool escaped = false;
 
 void Game::Init()
 {
-	//checkerboard image
-	auto black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 1));
-	auto white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
-	_testImage1 = Application::Vulkan.UploadImage((void*)&black, VkExtent3D{1, 1, 1}, vk::Format::eR8G8B8A8Unorm,
-		vk::ImageUsageFlagBits::eSampled);
-	_testImage2 = Application::Vulkan.UploadImage((void*)&white, VkExtent3D{ 1, 1, 1 }, vk::Format::eR8G8B8A8Unorm,
-		vk::ImageUsageFlagBits::eSampled);
-
-	std::vector<std::pair<vk::ImageView, vk::Sampler>> textures;
-	textures.push_back({ *_testImage1.imageView, *Application::Vulkan.DefaultSampler });
-	textures.push_back({ *_testImage2.imageView, *Application::Vulkan.DefaultSampler });
-	Application::Vulkan.UpdateMeshTextures(textures);
-
-	modelAsset = Asset::LoadModelGLTF("res/untitled.glb");
+	modelAsset = Asset::LoadModelGLTF("res/skeleton.glb");
 	scene.LoadModel(modelAsset);
 
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);

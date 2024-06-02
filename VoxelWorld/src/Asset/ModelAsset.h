@@ -8,6 +8,7 @@
 class ModelAsset
 {
 public:
+	const static glm::uint ErrorColor = 4294902015; //magenta
 
 	struct Surface
 	{
@@ -32,8 +33,18 @@ public:
 		std::vector<VertexBone> VertexBones;
 	};
 
+	struct Image
+	{
+		unsigned char* data;
+		vk::Format format;
+		vk::Extent3D size;
+		bool error = false;
+		~Image();
+	};
+
 	std::vector<Node> Skeleton;
 	std::vector<Mesh> Meshes;
+	std::vector<std::unique_ptr<Image>> Textures;
 };
 
 namespace Asset {
