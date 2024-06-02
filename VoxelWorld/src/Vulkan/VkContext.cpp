@@ -525,12 +525,11 @@ void VkContext::init_samplers()
     DefaultSampler = Device->createSamplerUnique(samplerInfo);
 }
 
-std::pair<AllocatedBuffer, VkDeviceAddress> VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
+AllocatedBuffer VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
 {
     const size_t size = mats.size() * sizeof(glm::mat4);
     AllocatedBuffer buffer = Allocator.CreateBufferUnique(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
-    VkDeviceAddress address = Device->getBufferAddress(vk::BufferDeviceAddressInfo(buffer.buffer));
     AllocatedBuffer staging = Allocator.CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
     void* data = staging.allocation->GetMappedData();
     memcpy(data, mats.data(), size);
@@ -543,7 +542,12 @@ std::pair<AllocatedBuffer, VkDeviceAddress> VkContext::UploadJointMatrices(const
         cmd.copyBuffer(staging.buffer, buffer.buffer, copy);
     });
     vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
-    return std::make_pair(buffer, address);
+    return buffer;
+}
+
+VkDeviceAddress VkContext::GetBufferAddress(const AllocatedBuffer& buffer)
+{
+    return Device->getBufferAddress(vk::BufferDeviceAddressInfo(buffer.buffer));
 }
 
 MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<VertexBone>& bones)
@@ -561,9 +565,6 @@ MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const st
     newSurface.vertexBoneBuffer = Allocator.CreateBufferUnique(vertexBoneBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    //find the adress of the vertex buffer
-    newSurface.vertexBufferAddress = Device->getBufferAddress(vk::BufferDeviceAddressInfo(newSurface.vertexBuffer.buffer));
-    newSurface.vertexBoneBufferAddress = Device->getBufferAddress(vk::BufferDeviceAddressInfo(newSurface.vertexBoneBuffer.buffer));
     //create index buffer
     newSurface.indexBuffer = Allocator.CreateBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
         VMA_MEMORY_USAGE_GPU_ONLY);

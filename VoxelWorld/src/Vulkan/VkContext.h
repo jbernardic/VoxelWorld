@@ -36,11 +36,13 @@ public:
     void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
     FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
     
+    VkDeviceAddress GetBufferAddress(const AllocatedBuffer& buffer);
+
     MeshBuffers UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<VertexBone>& bones);
     AllocatedImage UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
-    void UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures);
+    AllocatedBuffer UploadJointMatrices(const std::vector<glm::mat4>& mats);
 
-    std::pair<AllocatedBuffer, VkDeviceAddress> UploadJointMatrices(const std::vector<glm::mat4>& mats);
+    void UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures);
 
     vk::UniqueInstance Instance;
     vk::UniqueDebugUtilsMessengerEXT DebugMessenger;

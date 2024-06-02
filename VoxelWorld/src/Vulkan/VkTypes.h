@@ -43,8 +43,6 @@ struct MeshBuffers
 	AllocatedBuffer indexBuffer;
 	AllocatedBuffer vertexBuffer;
 	AllocatedBuffer vertexBoneBuffer;
-	VkDeviceAddress vertexBufferAddress;
-	VkDeviceAddress vertexBoneBufferAddress;
 };
 
 // push constants for our mesh object draws
