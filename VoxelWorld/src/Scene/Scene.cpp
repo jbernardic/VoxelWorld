@@ -13,8 +13,8 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 	for (const auto& bone : modelAsset.Skeleton)
 	{
 		SkeletonJoint joint;
-		joint.children = std::move(bone.children);
-		joint.inverseBindMatrix = std::move(bone.inverseBindMatrix);
+		joint.children = bone.children;
+		joint.inverseBindMatrix = bone.inverseBindMatrix;
 		joint.parent = bone.parent;
 		joint.transform = Math::Transform(bone.localTransform);
 		model.skeleton.joints.push_back(joint);
@@ -36,14 +36,6 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 			meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(joints);
 			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(mesh.buffers.vertexBuffer);
 			meshInfo.pushConstants.vertexBoneBuffer = Application::Vulkan.GetBufferAddress(mesh.buffers.vertexBoneBuffer);
-
-			//TODO: change later
-
-			glm::mat4 view = glm::translate(glm::vec3{ 0,0, -400 });
-			glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)Application::Vulkan.DrawExtent.width / (float)Application::Vulkan.DrawExtent.height, 0.1f, 10000.0f);
-			projection[1][1] *= -1;
-
-			meshInfo.pushConstants.worldMatrix = projection*view;
 			mesh.surfaces.push_back(std::move(meshInfo));
 		}
 		model.meshes.push_back(std::move(mesh));
@@ -60,7 +52,7 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 //	loadedMeshes.erase(it);
 //}
 
-void Scene::Render()
+void Scene::Render(const Camera& camera)
 {
 	auto& ctx = Application::Vulkan.DrawContext;
 	for (auto& model : models)
@@ -69,6 +61,7 @@ void Scene::Render()
 		{
 			for (auto& surface : mesh.surfaces)
 			{
+				surface.pushConstants.worldMatrix = camera.GetViewProjectionMatrix();
 				ctx.meshes.push_back(surface);
 			}
 		}

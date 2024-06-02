@@ -4,7 +4,7 @@ class Camera
 {
 public:
 	Camera(float fov_deg, float width, float height);
-	Camera() {};
+	Camera() = default;
 	void SetProjection(float fov_deg, float width, float height);
 	void SetPosition(glm::vec3 position);
 	void SetPitch(float pitch_deg);

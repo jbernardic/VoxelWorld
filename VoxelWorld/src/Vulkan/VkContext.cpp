@@ -244,8 +244,7 @@ void VkContext::create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfa
 
 void VkContext::draw_background(vk::CommandBuffer cmd)
 {
-    float flash = std::abs(std::sin(FrameNumber / 120.f));
-    vk::ClearColorValue clearValue(0.0f, 0.0f, flash, 1.0f);
+    vk::ClearColorValue clearValue(0.0f, 0.5f, 0.5f, 1.0f);
     vk::ImageSubresourceRange clearRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS);
 
     cmd.clearColorImage(DrawImage.image, vk::ImageLayout::eGeneral, clearValue, clearRange);

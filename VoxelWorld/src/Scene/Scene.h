@@ -1,4 +1,5 @@
 #pragma once
+#include "Camera.h"
 #include <iostream>
 #include "../Asset/ModelAsset.h"
 #include "../Helpers/Math.h"
@@ -34,7 +35,7 @@ class Scene
 public:
 
 	std::list<Model>::iterator LoadModel(const ModelAsset& meshAsset);
-	void Render();
+	void Render(const Camera& camera);
 private:
 	std::list<Model> models;
 };
