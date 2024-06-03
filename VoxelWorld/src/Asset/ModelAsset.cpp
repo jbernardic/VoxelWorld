@@ -4,6 +4,7 @@
 #include <glm/gtx/quaternion.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include <set>
 
 static glm::mat4 convertTransform(std::variant<fastgltf::TRS, fastgltf::Node::TransformMatrix> variant)
 {
@@ -25,23 +26,6 @@ static glm::mat4 convertTransform(std::variant<fastgltf::TRS, fastgltf::Node::Tr
     {
         auto& transform = std::get<fastgltf::Node::TransformMatrix>(variant);
         return glm::make_mat4(transform.data());
-    }
-}
-
-static void processSkeletonNode(ModelAsset::Node& current, std::unordered_map<int, ModelAsset::Node>& nodes, std::vector<ModelAsset::Node>& skeleton, glm::mat4 transform=glm::mat4(1.0))
-{
-    skeleton.push_back(std::move(current));
-    uint32_t index = skeleton.size() - 1;
-
-    transform = transform * skeleton[index].localTransform;
-    skeleton[index].globalTransform = transform;
-
-    for (int i = 0; i<skeleton[index].children.size(); i++)
-    {
-        int childIndex = skeleton[index].children[i];
-        nodes[childIndex].parent = index;
-        skeleton[index].children[i] = skeleton.size();
-        processSkeletonNode(nodes[childIndex], nodes, skeleton, transform);
     }
 }
 
@@ -122,6 +106,25 @@ static std::unique_ptr<ModelAsset::Image> loadImage(fastgltf::Asset& asset, fast
 }
 
 
+static void processNode(int current, std::optional<uint32_t> skeletonParent, std::vector<ModelAsset::Node>& nodes, std::unordered_map<int, int>& joints,
+    std::unordered_map<int, ModelAsset::Node>& skeleton, glm::mat4 transform = glm::mat4(1.0))
+{
+    nodes[current].globalTransform = transform * nodes[current].localTransform;
+
+    if (joints.find(current) != joints.end())
+    {
+        skeleton[current] = nodes[current];
+        skeleton[current].parent = skeletonParent;
+        skeletonParent = current;
+    }
+
+    for (int i = 0; i < nodes[current].children.size(); i++)
+    {
+        int childIndex = nodes[current].children[i];
+        processNode(childIndex, skeletonParent, nodes, joints, skeleton, nodes[current].globalTransform);
+    }
+}
+
 ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
 {
     std::cout << "Loading GLTF: " << filePath << std::endl;
@@ -158,32 +161,54 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
     std::vector<Vertex> vertices;
     std::vector<VertexBone> bones;
     std::vector<ModelAsset::Surface> surfaces;
+
+    std::unordered_map<int, ModelAsset::Node> skeletonNodeMap;
     std::vector<ModelAsset::Node> skeletonNodes;
 
     ModelAsset asset;
 
     if (gltf.skins.size() > 0)
     {
-        std::unordered_map<int, ModelAsset::Node> skeletonReleatedNodes;
-        std::vector<int> skeletonNodeIndices;
+        std::vector<ModelAsset::Node> nodes(gltf.nodes.size());
+        std::unordered_map<int, int> jointMap;
 
-        for (auto jointIndex : gltf.skins[0].joints)
+        for (int i = 0; i < gltf.skins[0].joints.size(); i++)
         {
-            fastgltf::Node& jointNode = gltf.nodes[jointIndex];
-            skeletonReleatedNodes[jointIndex].localTransform = convertTransform(jointNode.transform);
-            for (auto& child : jointNode.children)
-            {
-                skeletonReleatedNodes[child].parent = jointIndex;
-                skeletonReleatedNodes[jointIndex].children.push_back(child);
-            }
-            skeletonNodeIndices.push_back(jointIndex);
+            jointMap[gltf.skins[0].joints[i]] = i;
         }
 
-        for (auto it = skeletonReleatedNodes.begin(); it != skeletonReleatedNodes.end(); ++it)
+        for (int i = 0; i < gltf.nodes.size(); i++)
         {
-            if (!it->second.parent.has_value())
+            nodes[i].localTransform = convertTransform(gltf.nodes[i].transform);
+            for (auto& childIndex : gltf.nodes[i].children)
             {
-                processSkeletonNode(it->second, skeletonReleatedNodes, skeletonNodes);
+                nodes[i].children.push_back(childIndex);
+                nodes[childIndex].parent = i;
+            }
+        }
+
+        for (int i = 0; i < gltf.nodes.size(); i++)
+        {
+            if(!nodes[i].parent.has_value())
+                processNode(i, {}, nodes, jointMap, skeletonNodeMap);
+        }
+
+        //convert skeleton map to skeleton vector 
+        // based on join indices
+        skeletonNodes.resize(jointMap.size());
+        for (const auto& p : skeletonNodeMap)
+        {
+            int index = jointMap[p.first];
+            skeletonNodes[index] = p.second;
+
+            std::optional<uint32_t> parent = p.second.parent;
+            if (parent.has_value())
+            {
+                skeletonNodes[index].parent = jointMap[parent.value()];
+            }
+            for (int i = 0; i<skeletonNodes[index].children.size(); i++)
+            {
+                skeletonNodes[index].children[i] = jointMap[skeletonNodes[index].children[i]];
             }
         }
         
@@ -196,7 +221,6 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
             node.inverseBindMatrix = mat;
         });
     }
-    auto a = gltf.textures;
     // load all textures
     for (fastgltf::Image& image : gltf.images)
     {

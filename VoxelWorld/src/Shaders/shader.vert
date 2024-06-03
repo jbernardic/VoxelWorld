@@ -53,7 +53,7 @@ void main()
 		bone.weight.x * PushConstants.jointMatrixBuffer.joints[int(bone.joint.x)] +
 		bone.weight.y * PushConstants.jointMatrixBuffer.joints[int(bone.joint.y)] +
 		bone.weight.z * PushConstants.jointMatrixBuffer.joints[int(bone.joint.z)] +
-		bone.weight.w * PushConstants.jointMatrixBuffer.joints[int(bone.joint.w)];	
+		bone.weight.w * PushConstants.jointMatrixBuffer.joints[int(bone.joint.w)];
 		position = skinMat * position;
 	}
 

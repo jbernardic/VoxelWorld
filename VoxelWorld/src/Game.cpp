@@ -57,7 +57,7 @@ bool escaped = false;
 
 void Game::Init()
 {
-	modelAsset = Asset::LoadModelGLTF("res/skeleton.glb");
+	modelAsset = Asset::LoadModelGLTF("res/untitled.glb");
 	scene.LoadModel(modelAsset);
 
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
