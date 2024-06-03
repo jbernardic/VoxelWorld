@@ -107,14 +107,15 @@ static std::unique_ptr<ModelAsset::Image> loadImage(fastgltf::Asset& asset, fast
 
 
 static void processNode(int current, std::optional<uint32_t> skeletonParent, std::vector<ModelAsset::Node>& nodes, std::unordered_map<int, int>& joints,
-    std::unordered_map<int, ModelAsset::Node>& skeleton, glm::mat4 transform = glm::mat4(1.0))
+    std::vector<ModelAsset::Node>& skeleton, glm::mat4 transform = glm::mat4(1.0))
 {
     nodes[current].globalTransform = transform * nodes[current].localTransform;
 
-    if (joints.find(current) != joints.end())
+    auto joint = joints.find(current);
+    if (joint != joints.end())
     {
-        skeleton[current] = nodes[current];
-        skeleton[current].parent = skeletonParent;
+        skeleton[joint->second] = nodes[current];
+        skeleton[joint->second].parent = skeletonParent;
         skeletonParent = current;
     }
 
@@ -161,8 +162,6 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
     std::vector<Vertex> vertices;
     std::vector<VertexBone> bones;
     std::vector<ModelAsset::Surface> surfaces;
-
-    std::unordered_map<int, ModelAsset::Node> skeletonNodeMap;
     std::vector<ModelAsset::Node> skeletonNodes;
 
     ModelAsset asset;
@@ -187,29 +186,11 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
             }
         }
 
+        skeletonNodes.resize(jointMap.size());
         for (int i = 0; i < gltf.nodes.size(); i++)
         {
             if(!nodes[i].parent.has_value())
-                processNode(i, {}, nodes, jointMap, skeletonNodeMap);
-        }
-
-        //convert skeleton map to skeleton vector 
-        // based on join indices
-        skeletonNodes.resize(jointMap.size());
-        for (const auto& p : skeletonNodeMap)
-        {
-            int index = jointMap[p.first];
-            skeletonNodes[index] = p.second;
-
-            std::optional<uint32_t> parent = p.second.parent;
-            if (parent.has_value())
-            {
-                skeletonNodes[index].parent = jointMap[parent.value()];
-            }
-            for (int i = 0; i<skeletonNodes[index].children.size(); i++)
-            {
-                skeletonNodes[index].children[i] = jointMap[skeletonNodes[index].children[i]];
-            }
+                processNode(i, {}, nodes, jointMap, skeletonNodes);
         }
         
 
