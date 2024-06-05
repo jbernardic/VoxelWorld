@@ -40,8 +40,8 @@ public:
     VkDeviceAddress GetBufferAddress(const AllocatedBuffer& buffer);
 
     MeshBuffers UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<VertexBone>& bones);
-    std::list<AllocatedImage>::const_iterator UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
-    std::list<AllocatedBuffer>::const_iterator UploadJointMatrices(const std::vector<glm::mat4>& mats);
+    Allocator::Accessor<AllocatedImage> UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
+    Allocator::Accessor<AllocatedBuffer> UploadJointMatrices(const std::vector<glm::mat4>& mats);
 
     void UpdateMeshTextures(const std::vector<Texture>& textures);
 
@@ -49,7 +49,7 @@ public:
     vk::UniqueDebugUtilsMessengerEXT DebugMessenger;
     vk::PhysicalDevice PhysicalDevice;
     vk::UniqueDevice Device;
-    UniqueVmaAllocator Allocator;
+
     vk::UniqueSurfaceKHR Surface;
     vk::UniqueSwapchainKHR Swapchain;
     vk::SwapchainCreateInfoKHR SwapchainInfo;
@@ -65,7 +65,7 @@ public:
     vk::UniqueFence ImmFence;
     vk::UniqueCommandPool ImmCommandPool;
     vk::UniqueCommandBuffer ImmCommandBuffer;
-    std::list<AllocatedImage>::const_iterator DrawImage;
+    Allocator::Accessor<AllocatedImage> DrawImage;
     DrawContext DrawContext;
     
     vk::UniqueSampler DefaultSampler;
@@ -73,6 +73,8 @@ public:
     vk::UniqueDescriptorPool DescriptorPool;
     vk::DescriptorSet MeshDescriptorSet;
     vk::UniqueDescriptorSetLayout MeshDescriptorSetLayout;
+
+    std::unique_ptr<Allocator> allocator;
 
 private:
     SDL_Window* sdl_window;

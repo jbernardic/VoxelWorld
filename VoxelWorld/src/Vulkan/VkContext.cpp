@@ -155,14 +155,7 @@ void VkContext::init_vulkan()
     GraphicsQueue = Device->getQueue(queueFamilyIndices.Main, 0);
 
     //VMA Allocator
-    VmaAllocator allocator;
-    VmaAllocatorCreateInfo allocatorInfo = {};
-    allocatorInfo.physicalDevice = PhysicalDevice;
-    allocatorInfo.device = *Device;
-    allocatorInfo.instance = *Instance;
-    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-    vmaCreateAllocator(&allocatorInfo, &allocator);
-    Allocator.Set(allocator);    void BuildGraphicsPipeline();
+    allocator = std::make_unique<Allocator>(PhysicalDevice, *Device, *Instance);
 
 }
 
@@ -191,7 +184,7 @@ void VkContext::init_swapchain()
     drawImageUsages |= vk::ImageUsageFlagBits::eStorage;
     drawImageUsages |= vk::ImageUsageFlagBits::eColorAttachment;
 
-    DrawImage = Allocator.CreateImageUnique(*Device, imageExtent, imageFormat, drawImageUsages);
+    DrawImage = allocator->CreateImage(imageExtent, imageFormat, drawImageUsages);
 }
 
 void VkContext::create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount)
@@ -242,7 +235,7 @@ void VkContext::draw_background(vk::CommandBuffer cmd)
 
 void VkContext::draw_geometry(vk::CommandBuffer cmd)
 {
-    vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(*DrawImage->imageView, nullptr, vk::ImageLayout::eGeneral);
+    vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(DrawImage->imageView, nullptr, vk::ImageLayout::eGeneral);
 
     vk::RenderingInfo renderInfo{};
     renderInfo.renderArea.extent = GetDrawExtent();
@@ -480,13 +473,13 @@ void VkContext::init_samplers()
     DefaultSampler = Device->createSamplerUnique(samplerInfo);
 }
 
-std::list<AllocatedBuffer>::const_iterator VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
+Allocator::Accessor<AllocatedBuffer> VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
 {
     const size_t size = mats.size() * sizeof(glm::mat4);
-    std::list<AllocatedBuffer>::const_iterator buffer = Allocator.CreateBufferUnique(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+    Allocator::Accessor<AllocatedBuffer> buffer = allocator->CreateBuffer(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
-    AllocatedBuffer staging = Allocator.CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
-    void* data = staging.allocation->GetMappedData();
+    Allocator::Accessor<AllocatedBuffer> staging = allocator->CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+    void* data = staging->allocation->GetMappedData();
     memcpy(data, mats.data(), size);
     ImmediateSubmit([&](vk::CommandBuffer cmd) {
         vk::BufferCopy copy{ 0 };
@@ -494,9 +487,9 @@ std::list<AllocatedBuffer>::const_iterator VkContext::UploadJointMatrices(const 
         copy.srcOffset = 0;
         copy.size = size;
 
-        cmd.copyBuffer(staging.buffer, buffer->buffer, copy);
+        cmd.copyBuffer(staging->buffer, buffer->buffer, copy);
     });
-    vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
+   // allocator.DestroyBuffer(staging);
     return buffer;
 }
 
@@ -514,18 +507,18 @@ MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const st
     MeshBuffers newSurface;
 
     //create vertex buffer
-    newSurface.vertexBuffer = Allocator.CreateBufferUnique(vertexBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+    newSurface.vertexBuffer = allocator->CreateBuffer(vertexBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    newSurface.vertexBoneBuffer = Allocator.CreateBufferUnique(vertexBoneBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+    newSurface.vertexBoneBuffer = allocator->CreateBuffer(vertexBoneBufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
     //create index buffer
-    newSurface.indexBuffer = Allocator.CreateBufferUnique(indexBufferSize, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+    newSurface.indexBuffer = allocator->CreateBuffer(indexBufferSize, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    AllocatedBuffer staging = Allocator.CreateBuffer(vertexBufferSize + indexBufferSize + vertexBoneBufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
-    void* data = staging.allocation->GetMappedData();
+    Allocator::Accessor<AllocatedBuffer> staging = allocator->CreateBuffer(vertexBufferSize + indexBufferSize + vertexBoneBufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+    void* data = staging->allocation->GetMappedData();
 
     memcpy(data, vertices.data(), vertexBufferSize);
     memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
@@ -538,24 +531,24 @@ MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const st
         vertexCopy.srcOffset = 0;
         vertexCopy.size = vertexBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.vertexBuffer->buffer, vertexCopy);
+        cmd.copyBuffer(staging->buffer, newSurface.vertexBuffer->buffer, vertexCopy);
 
         vk::BufferCopy indexCopy{ 0 };
         indexCopy.dstOffset = 0;
         indexCopy.srcOffset = vertexBufferSize;
         indexCopy.size = indexBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.indexBuffer->buffer, indexCopy);
+        cmd.copyBuffer(staging->buffer, newSurface.indexBuffer->buffer, indexCopy);
 
         vk::BufferCopy boneCopy{ 0 };
         boneCopy.dstOffset = 0;
         boneCopy.srcOffset = vertexBufferSize + indexBufferSize;
         boneCopy.size = vertexBoneBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.vertexBoneBuffer->buffer, boneCopy);
+        cmd.copyBuffer(staging->buffer, newSurface.vertexBoneBuffer->buffer, boneCopy);
     });
 
-    vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
+   // allocator.DestroyBuffer(staging);
 
     return newSurface;
 }
@@ -591,14 +584,14 @@ void VkContext::ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& fun
 
 }
 
-std::list<AllocatedImage>::const_iterator VkContext::UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
+Allocator::Accessor<AllocatedImage> VkContext::UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
 {
     size_t data_size = size.depth * size.width * size.height * 4;
-    AllocatedBuffer uploadbuffer = Allocator.CreateBuffer(data_size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    Allocator::Accessor<AllocatedBuffer> uploadbuffer = allocator->CreateBuffer(data_size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    memcpy(uploadbuffer.info.pMappedData, data, data_size);
+    memcpy(uploadbuffer->info.pMappedData, data, data_size);
 
-    std::list<AllocatedImage>::const_iterator new_image = Allocator.CreateImageUnique(*Device, size, format, usage | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc);
+    Allocator::Accessor<AllocatedImage> new_image = allocator->CreateImage(size, format, usage | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc);
 
     ImmediateSubmit([&](VkCommandBuffer cmd) {
         vk::tool::TransitionImage(cmd, new_image->image, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
@@ -615,13 +608,13 @@ std::list<AllocatedImage>::const_iterator VkContext::UploadImage(void* data, vk:
         copyRegion.imageExtent = size;
 
         // copy the buffer into the image
-        vkCmdCopyBufferToImage(cmd, uploadbuffer.buffer, new_image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+        vkCmdCopyBufferToImage(cmd, uploadbuffer->buffer, new_image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
             &copyRegion);
 
         vk::tool::TransitionImage(cmd, new_image->image, vk::ImageLayout::eTransferDstOptimal,
             vk::ImageLayout::eShaderReadOnlyOptimal);
     });
-    vmaDestroyBuffer(*Allocator, uploadbuffer.buffer, uploadbuffer.allocation);
+   // allocator.DestroyBuffer(uploadbuffer);
     return new_image;
 }
 
@@ -634,7 +627,7 @@ void VkContext::UpdateMeshTextures(const std::vector<Texture>& textures)
     std::vector<vk::DescriptorImageInfo> descriptorImageInfos(textures.size());
     for (int i = 0; i < textures.size(); i++)
     {
-        descriptorImageInfos[i].imageView = *textures[i].image->imageView;
+        descriptorImageInfos[i].imageView = textures[i].image->imageView;
         descriptorImageInfos[i].sampler = textures[i].sampler;
         descriptorImageInfos[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     }

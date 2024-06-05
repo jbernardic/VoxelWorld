@@ -8,6 +8,7 @@
 #include <array>
 #include <functional>
 #include <deque>
+#include <stack>
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vk_enum_string_helper.h>
@@ -19,7 +20,7 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 
-#include "UniqueVmaAllocator.h"
+#include "Allocator.h"
 
 struct Vertex
 {
@@ -39,10 +40,9 @@ struct VertexBone
 // holds the resources needed for a mesh
 struct MeshBuffers
 {
-
-	std::list<AllocatedBuffer>::const_iterator indexBuffer;
-	std::list<AllocatedBuffer>::const_iterator vertexBuffer;
-	std::list<AllocatedBuffer>::const_iterator vertexBoneBuffer;
+	Allocator::Accessor<AllocatedBuffer> indexBuffer;
+	Allocator::Accessor<AllocatedBuffer> vertexBuffer;
+	Allocator::Accessor<AllocatedBuffer> vertexBoneBuffer;
 };
 
 // push constants for our mesh object draws
@@ -66,6 +66,6 @@ struct RenderMeshInfo
 
 struct Texture
 {
-	std::list<AllocatedImage>::const_iterator image;
+	Allocator::Accessor<AllocatedImage> image;
 	vk::Sampler sampler;
 };

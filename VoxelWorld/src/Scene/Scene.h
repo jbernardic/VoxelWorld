@@ -14,7 +14,7 @@ struct SkeletonJoint
 
 struct Skeleton
 {
-	std::list<AllocatedBuffer>::const_iterator jointMatrixBuffer;
+	Allocator::Accessor<AllocatedBuffer> jointMatrixBuffer;
 };
 
 struct Mesh
