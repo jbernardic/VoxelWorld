@@ -40,9 +40,9 @@ struct VertexBone
 struct MeshBuffers
 {
 
-	AllocatedBuffer indexBuffer;
-	AllocatedBuffer vertexBuffer;
-	AllocatedBuffer vertexBoneBuffer;
+	std::list<AllocatedBuffer>::const_iterator indexBuffer;
+	std::list<AllocatedBuffer>::const_iterator vertexBuffer;
+	std::list<AllocatedBuffer>::const_iterator vertexBoneBuffer;
 };
 
 // push constants for our mesh object draws
@@ -62,4 +62,10 @@ struct RenderMeshInfo
 	
 	vk::Buffer indexBuffer;
 	MeshPushConstants pushConstants;
+};
+
+struct Texture
+{
+	std::list<AllocatedImage>::const_iterator image;
+	vk::Sampler sampler;
 };

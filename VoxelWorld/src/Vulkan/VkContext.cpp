@@ -35,18 +35,18 @@ void VkContext::Draw()
 
     // transition our main draw image into general layout so we can write into it
     // we will overwrite it all so we dont care about what was the older layout
-    vk::tool::TransitionImage(cmd, DrawImage.image, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+    vk::tool::TransitionImage(cmd, DrawImage->image, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 
     draw_background(cmd);
 
-    vk::tool::TransitionImage(cmd, DrawImage.image, vk::ImageLayout::eGeneral, vk::ImageLayout::eAttachmentOptimal);
+    vk::tool::TransitionImage(cmd, DrawImage->image, vk::ImageLayout::eGeneral, vk::ImageLayout::eAttachmentOptimal);
 
     draw_geometry(cmd);
 
     //transition the draw image and the swapchain image into their correct transfer layouts
-    vk::tool::TransitionImage(cmd, DrawImage.image, vk::ImageLayout::eAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
+    vk::tool::TransitionImage(cmd, DrawImage->image, vk::ImageLayout::eAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
     vk::tool::TransitionImage(cmd, SwapchainImages[swapchainImageIndex.value], vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-    vk::tool::CopyImageToImage(cmd, DrawImage.image, SwapchainImages[swapchainImageIndex.value], DrawExtent, SwapchainInfo.imageExtent);
+    vk::tool::CopyImageToImage(cmd, DrawImage->image, SwapchainImages[swapchainImageIndex.value], GetDrawExtent(), SwapchainInfo.imageExtent);
 
     // set swapchain image layout to Present so we can show it on the screen
     vk::tool::TransitionImage(cmd, SwapchainImages[swapchainImageIndex.value], vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::ePresentSrcKHR);
@@ -182,9 +182,8 @@ void VkContext::init_swapchain()
     create_swapchain(extent, surfaceFormat, presentMode, deviceCapabilities.currentTransform, imageCount);
 
     //Create DrawImage
-    DrawImage.imageFormat = vk::Format::eR16G16B16A16Sfloat;
-    DrawImage.imageExtent = vk::Extent3D(extent.width, extent.height, 1);
-    DrawExtent = extent;
+    auto imageFormat = vk::Format::eR16G16B16A16Sfloat;
+    auto imageExtent = vk::Extent3D(extent.width, extent.height, 1);
 
     vk::ImageUsageFlags drawImageUsages{};
     drawImageUsages |= vk::ImageUsageFlagBits::eTransferSrc;
@@ -192,16 +191,7 @@ void VkContext::init_swapchain()
     drawImageUsages |= vk::ImageUsageFlagBits::eStorage;
     drawImageUsages |= vk::ImageUsageFlagBits::eColorAttachment;
 
-    VkImageCreateInfo rimg_info = vk::tool::ImageCreateInfo(DrawImage.imageFormat, drawImageUsages, DrawImage.imageExtent);
-
-    VmaAllocationCreateInfo rimg_allocinfo = {};
-    rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    vmaCreateImage(*Allocator, &rimg_info, &rimg_allocinfo, (VkImage*)&DrawImage.image, &DrawImage.allocation, nullptr);
-
-    DrawImage.imageView = Device->createImageViewUnique(vk::tool::ImageViewCreateInfo(DrawImage.imageFormat, DrawImage.image, vk::ImageAspectFlagBits::eColor));
-    Allocator.RegisterImage(DrawImage);
+    DrawImage = Allocator.CreateImageUnique(*Device, imageExtent, imageFormat, drawImageUsages);
 }
 
 void VkContext::create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount)
@@ -247,15 +237,15 @@ void VkContext::draw_background(vk::CommandBuffer cmd)
     vk::ClearColorValue clearValue(0.0f, 0.5f, 0.5f, 1.0f);
     vk::ImageSubresourceRange clearRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS);
 
-    cmd.clearColorImage(DrawImage.image, vk::ImageLayout::eGeneral, clearValue, clearRange);
+    cmd.clearColorImage(DrawImage->image, vk::ImageLayout::eGeneral, clearValue, clearRange);
 }
 
 void VkContext::draw_geometry(vk::CommandBuffer cmd)
 {
-    vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(*DrawImage.imageView, nullptr, vk::ImageLayout::eGeneral);
+    vk::RenderingAttachmentInfo colorAttachment = vk::tool::AttachmentInfo(*DrawImage->imageView, nullptr, vk::ImageLayout::eGeneral);
 
     vk::RenderingInfo renderInfo{};
-    renderInfo.renderArea.extent = DrawExtent;
+    renderInfo.renderArea.extent = GetDrawExtent();
     renderInfo.layerCount = 1;
     renderInfo.colorAttachmentCount = 1;
     renderInfo.pColorAttachments = &colorAttachment;
@@ -267,8 +257,8 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
     vk::Viewport viewport;
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float>(DrawExtent.width);
-    viewport.height = static_cast<float>(DrawExtent.height);
+    viewport.width = static_cast<float>(GetDrawExtent().width);
+    viewport.height = static_cast<float>(GetDrawExtent().height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
@@ -276,7 +266,7 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
 
     vk::Rect2D scissor;
     scissor.offset = vk::Offset2D{ 0, 0 };
-    scissor.extent = DrawExtent;
+    scissor.extent = GetDrawExtent();
 
     cmd.setScissor(0, scissor);
 
@@ -289,40 +279,6 @@ void VkContext::draw_geometry(vk::CommandBuffer cmd)
     }
 
     cmd.endRendering();
-}
-
-AllocatedImage VkContext::create_image(vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
-{
-    AllocatedImage newImage;
-    newImage.imageFormat = format;
-    newImage.imageExtent = size;
-
-    vk::ImageCreateInfo img_info = vk::tool::ImageCreateInfo(format, usage, size);
-
-    // always allocate images on dedicated GPU memory
-    VmaAllocationCreateInfo allocinfo = {};
-    allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    // allocate and create the image
-    vmaCreateImage(*Allocator, (VkImageCreateInfo*) & img_info, &allocinfo, (VkImage*) & newImage.image, &newImage.allocation, nullptr);
-
-    // if the format is a depth format, we will need to have it use the correct
-    // aspect flag
-    vk::ImageAspectFlags aspectFlag = vk::ImageAspectFlagBits::eColor;
-    if (format == vk::Format::eD32Sfloat)
-    {
-        aspectFlag = vk::ImageAspectFlagBits::eDepth;
-    }
-
-    // build a image-view for the image
-    vk::ImageViewCreateInfo view_info = vk::tool::ImageViewCreateInfo(format, newImage.image, aspectFlag);
-    view_info.subresourceRange.levelCount = img_info.mipLevels;
-
-    newImage.imageView = Device->createImageViewUnique(view_info);
-    Allocator.RegisterImage(newImage);
-
-    return newImage;
 }
 
 void VkContext::init_commands()
@@ -524,10 +480,10 @@ void VkContext::init_samplers()
     DefaultSampler = Device->createSamplerUnique(samplerInfo);
 }
 
-AllocatedBuffer VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
+std::list<AllocatedBuffer>::const_iterator VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mats)
 {
     const size_t size = mats.size() * sizeof(glm::mat4);
-    AllocatedBuffer buffer = Allocator.CreateBufferUnique(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+    std::list<AllocatedBuffer>::const_iterator buffer = Allocator.CreateBufferUnique(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
         VMA_MEMORY_USAGE_GPU_ONLY);
     AllocatedBuffer staging = Allocator.CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
     void* data = staging.allocation->GetMappedData();
@@ -538,7 +494,7 @@ AllocatedBuffer VkContext::UploadJointMatrices(const std::vector<glm::mat4>& mat
         copy.srcOffset = 0;
         copy.size = size;
 
-        cmd.copyBuffer(staging.buffer, buffer.buffer, copy);
+        cmd.copyBuffer(staging.buffer, buffer->buffer, copy);
     });
     vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
     return buffer;
@@ -582,21 +538,21 @@ MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const st
         vertexCopy.srcOffset = 0;
         vertexCopy.size = vertexBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.vertexBuffer.buffer, vertexCopy);
+        cmd.copyBuffer(staging.buffer, newSurface.vertexBuffer->buffer, vertexCopy);
 
         vk::BufferCopy indexCopy{ 0 };
         indexCopy.dstOffset = 0;
         indexCopy.srcOffset = vertexBufferSize;
         indexCopy.size = indexBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.indexBuffer.buffer, indexCopy);
+        cmd.copyBuffer(staging.buffer, newSurface.indexBuffer->buffer, indexCopy);
 
         vk::BufferCopy boneCopy{ 0 };
         boneCopy.dstOffset = 0;
         boneCopy.srcOffset = vertexBufferSize + indexBufferSize;
         boneCopy.size = vertexBoneBufferSize;
 
-        cmd.copyBuffer(staging.buffer, newSurface.vertexBoneBuffer.buffer, boneCopy);
+        cmd.copyBuffer(staging.buffer, newSurface.vertexBoneBuffer->buffer, boneCopy);
     });
 
     vmaDestroyBuffer(*Allocator, staging.buffer, staging.allocation);
@@ -635,17 +591,17 @@ void VkContext::ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& fun
 
 }
 
-AllocatedImage VkContext::UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
+std::list<AllocatedImage>::const_iterator VkContext::UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage)
 {
     size_t data_size = size.depth * size.width * size.height * 4;
     AllocatedBuffer uploadbuffer = Allocator.CreateBuffer(data_size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     memcpy(uploadbuffer.info.pMappedData, data, data_size);
 
-    AllocatedImage new_image = create_image(size, format, usage | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc);
+    std::list<AllocatedImage>::const_iterator new_image = Allocator.CreateImageUnique(*Device, size, format, usage | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc);
 
     ImmediateSubmit([&](VkCommandBuffer cmd) {
-        vk::tool::TransitionImage(cmd, new_image.image, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+        vk::tool::TransitionImage(cmd, new_image->image, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
         VkBufferImageCopy copyRegion = {};
         copyRegion.bufferOffset = 0;
@@ -659,17 +615,17 @@ AllocatedImage VkContext::UploadImage(void* data, vk::Extent3D size, vk::Format 
         copyRegion.imageExtent = size;
 
         // copy the buffer into the image
-        vkCmdCopyBufferToImage(cmd, uploadbuffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+        vkCmdCopyBufferToImage(cmd, uploadbuffer.buffer, new_image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
             &copyRegion);
 
-        vk::tool::TransitionImage(cmd, new_image.image, vk::ImageLayout::eTransferDstOptimal,
+        vk::tool::TransitionImage(cmd, new_image->image, vk::ImageLayout::eTransferDstOptimal,
             vk::ImageLayout::eShaderReadOnlyOptimal);
     });
     vmaDestroyBuffer(*Allocator, uploadbuffer.buffer, uploadbuffer.allocation);
     return new_image;
 }
 
-void VkContext::UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures)
+void VkContext::UpdateMeshTextures(const std::vector<Texture>& textures)
 {
     if (textures.size() > MAX_TEXTURE_COUNT)
     {
@@ -678,8 +634,8 @@ void VkContext::UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Samp
     std::vector<vk::DescriptorImageInfo> descriptorImageInfos(textures.size());
     for (int i = 0; i < textures.size(); i++)
     {
-        descriptorImageInfos[i].imageView = textures[i].first;
-        descriptorImageInfos[i].sampler = textures[i].second;
+        descriptorImageInfos[i].imageView = *textures[i].image->imageView;
+        descriptorImageInfos[i].sampler = textures[i].sampler;
         descriptorImageInfos[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     }
 

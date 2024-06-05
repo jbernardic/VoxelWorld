@@ -57,13 +57,13 @@ bool escaped = false;
 
 void Game::Init()
 {
-	modelAsset = Asset::LoadModelGLTF("res/untitled.glb");
+	modelAsset = Asset::LoadModelGLTF("res/skeleton.glb");
 	scene.LoadModel(modelAsset);
 
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();
 
-	camera = Camera(70.f, (float)Application::Vulkan.DrawExtent.width, (float)Application::Vulkan.DrawExtent.height);
+	camera = Camera(70.f, (float)Application::Vulkan.GetDrawExtent().width, (float)Application::Vulkan.GetDrawExtent().height);
 }
 
 void Game::Draw()

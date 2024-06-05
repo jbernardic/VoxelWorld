@@ -5,7 +5,6 @@
 std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 {
 	Model model;
-	AllocatedBuffer joints;
 	if (!modelAsset.Skeleton.empty())
 	{
 		//initialize joint matrices
@@ -19,19 +18,18 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 			joint.inverseBindMatrix = bone.inverseBindMatrix;
 			joint.parent = bone.parent;
 			joint.transform = Math::Transform(bone.localTransform);
-			model.skeleton.joints.push_back(joint);
 			jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
 		}
-		joints = Application::Vulkan.UploadJointMatrices(jointMatrices);
+		model.skeleton.jointMatrixBuffer = Application::Vulkan.UploadJointMatrices(jointMatrices);
 	}
 
 	//upload textures
 	if (modelAsset.Textures.size() > 0)
 	{
-		auto texture = Application::Vulkan.UploadImage(modelAsset.Textures[0]->data, modelAsset.Textures[0]->size, modelAsset.Textures[0]->format,
+		std::list<AllocatedImage>::const_iterator texture = Application::Vulkan.UploadImage(modelAsset.Textures[0]->data, modelAsset.Textures[0]->size, modelAsset.Textures[0]->format,
 			vk::ImageUsageFlagBits::eSampled);
 
-		textures.push_back({ *texture.imageView, *Application::Vulkan.DefaultSampler });
+		textures.push_back({ texture, *Application::Vulkan.DefaultSampler });
 		Application::Vulkan.UpdateMeshTextures(textures);
 	}
 
@@ -44,19 +42,25 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 			RenderMeshInfo meshInfo;
 			meshInfo.firstIndex = surface.firstIndex;
 			meshInfo.indexCount = surface.indexCount;
-			meshInfo.indexBuffer = mesh.buffers.indexBuffer.buffer;
+			meshInfo.indexBuffer = mesh.buffers.indexBuffer->buffer;
 
 			if(!modelAsset.Skeleton.empty())
-				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(joints);
+				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(*model.skeleton.jointMatrixBuffer);
 			meshInfo.pushConstants.useSkeleton = modelAsset.Skeleton.size();
-			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(mesh.buffers.vertexBuffer);
-			meshInfo.pushConstants.vertexBoneBuffer = Application::Vulkan.GetBufferAddress(mesh.buffers.vertexBoneBuffer);
+			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(*mesh.buffers.vertexBuffer);
+			meshInfo.pushConstants.vertexBoneBuffer = Application::Vulkan.GetBufferAddress(*mesh.buffers.vertexBoneBuffer);
 			mesh.surfaces.push_back(std::move(meshInfo));
 		}
 		model.meshes.push_back(std::move(mesh));
 	}
 	models.push_back(std::move(model));
 	return --models.end();
+}
+
+std::list<Model>::iterator Scene::LoadModel(const Model& model)
+{
+	models.push_back(model);
+	return std::list<Model>::iterator();
 }
 
 //void Scene::DestroyMesh(std::list<MeshReference>::iterator it)

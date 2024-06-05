@@ -14,7 +14,7 @@ struct SkeletonJoint
 
 struct Skeleton
 {
-	std::vector<SkeletonJoint> joints;
+	std::list<AllocatedBuffer>::const_iterator jointMatrixBuffer;
 };
 
 struct Mesh
@@ -28,15 +28,16 @@ struct Model
 	Math::Transform transform;
 	std::vector<Mesh> meshes;
 	Skeleton skeleton;
+	uint32_t texture = 0;
 };
 
 class Scene
 {
 public:
-
 	std::list<Model>::iterator LoadModel(const ModelAsset& meshAsset);
+	std::list<Model>::iterator LoadModel(const Model& model);
 	void Render(const Camera& camera);
 private:
 	std::list<Model> models;
-	std::vector<std::pair<vk::ImageView, vk::Sampler>> textures;
+	std::vector<Texture> textures;
 };

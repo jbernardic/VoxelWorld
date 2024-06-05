@@ -35,14 +35,15 @@ public:
     void Draw();
     void ImmediateSubmit(std::function<void(vk::CommandBuffer cmd)>&& function);
     FrameData& GetCurrentFrame() { return Frames[FrameNumber % FRAME_OVERLAP]; }
+    vk::Extent2D GetDrawExtent() { return vk::Extent2D(DrawImage->imageExtent.width, DrawImage->imageExtent.height); }
     
     VkDeviceAddress GetBufferAddress(const AllocatedBuffer& buffer);
 
     MeshBuffers UploadMesh(const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<VertexBone>& bones);
-    AllocatedImage UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
-    AllocatedBuffer UploadJointMatrices(const std::vector<glm::mat4>& mats);
+    std::list<AllocatedImage>::const_iterator UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
+    std::list<AllocatedBuffer>::const_iterator UploadJointMatrices(const std::vector<glm::mat4>& mats);
 
-    void UpdateMeshTextures(std::vector<std::pair<vk::ImageView, vk::Sampler>>& textures);
+    void UpdateMeshTextures(const std::vector<Texture>& textures);
 
     vk::UniqueInstance Instance;
     vk::UniqueDebugUtilsMessengerEXT DebugMessenger;
@@ -64,8 +65,7 @@ public:
     vk::UniqueFence ImmFence;
     vk::UniqueCommandPool ImmCommandPool;
     vk::UniqueCommandBuffer ImmCommandBuffer;
-    AllocatedImage DrawImage;
-    vk::Extent2D DrawExtent;
+    std::list<AllocatedImage>::const_iterator DrawImage;
     DrawContext DrawContext;
     
     vk::UniqueSampler DefaultSampler;
@@ -88,5 +88,4 @@ private:
     void create_swapchain(vk::Extent2D extent, vk::SurfaceFormatKHR surfaceFormat, vk::PresentModeKHR presentMode, vk::SurfaceTransformFlagBitsKHR transfrom, uint32_t imageCount);
     void draw_background(vk::CommandBuffer cmd);
     void draw_geometry(vk::CommandBuffer cmd);
-    AllocatedImage create_image(vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
 };
