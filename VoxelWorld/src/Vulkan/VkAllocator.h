@@ -18,7 +18,7 @@ struct AllocatedImage
 	vk::Format imageFormat;
 };
 
-class Allocator
+class VkAllocator
 {
 public:
 	template <class T>
@@ -53,7 +53,7 @@ public:
 			std::vector<T>* items = nullptr;
 	};
 
-	Allocator(vk::PhysicalDevice pdevice, vk::Device device, vk::Instance instance)
+	VkAllocator(vk::PhysicalDevice pdevice, vk::Device device, vk::Instance instance)
 	{
 		VmaAllocatorCreateInfo allocatorInfo = {};
 		allocatorInfo.physicalDevice = pdevice;
@@ -63,7 +63,7 @@ public:
 		vmaCreateAllocator(&allocatorInfo, &allocator);
 	}
 
-	~Allocator()
+	~VkAllocator()
 	{
 		for (const auto& e : images)
 		{
@@ -150,17 +150,17 @@ public:
 		return addImage(std::move(newImage));
 	}
 
-	//void DestroyBuffer(Accessor<AllocatedBuffer>& buffer)
-	//{
-	//	freeBufferIndices.push(buffer.GetIndex());
-	//	vmaDestroyBuffer(allocator, buffer->buffer, buffer->allocation);
-	//}
+	void DestroyBuffer(Accessor<AllocatedBuffer>& buffer)
+	{
+		freeBufferIndices.push(buffer.GetIndex());
+		vmaDestroyBuffer(allocator, buffer->buffer, buffer->allocation);
+	}
 
-	//void DestroyImage(Accessor<AllocatedImage>& image)
-	//{
-	//	freeImageIndices.push(image.GetIndex());
-	//	vmaDestroyImage(allocator, image->image, image->allocation);
-	//}
+	void DestroyImage(Accessor<AllocatedImage>& image)
+	{
+		freeImageIndices.push(image.GetIndex());
+		vmaDestroyImage(allocator, image->image, image->allocation);
+	}
 
 private:
 

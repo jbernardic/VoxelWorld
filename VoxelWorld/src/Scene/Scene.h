@@ -14,7 +14,7 @@ struct SkeletonJoint
 
 struct Skeleton
 {
-	Allocator::Accessor<AllocatedBuffer> jointMatrixBuffer;
+	VkAllocator::Accessor<AllocatedBuffer> jointMatrixBuffer;
 };
 
 struct Mesh

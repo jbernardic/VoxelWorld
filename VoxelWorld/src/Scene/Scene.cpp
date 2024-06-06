@@ -26,7 +26,7 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 	//upload textures
 	if (modelAsset.Textures.size() > 0)
 	{
-		Allocator::Accessor<AllocatedImage> texture = Application::Vulkan.UploadImage(modelAsset.Textures[0]->data, modelAsset.Textures[0]->size, modelAsset.Textures[0]->format,
+		VkAllocator::Accessor<AllocatedImage> texture = Application::Vulkan.UploadImage(modelAsset.Textures[0]->data, modelAsset.Textures[0]->size, modelAsset.Textures[0]->format,
 			vk::ImageUsageFlagBits::eSampled);
 
 		textures.push_back({ texture, *Application::Vulkan.DefaultSampler });

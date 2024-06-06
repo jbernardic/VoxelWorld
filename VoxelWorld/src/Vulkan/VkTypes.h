@@ -20,7 +20,7 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 
-#include "Allocator.h"
+#include "VkAllocator.h"
 
 struct Vertex
 {
@@ -40,9 +40,9 @@ struct VertexBone
 // holds the resources needed for a mesh
 struct MeshBuffers
 {
-	Allocator::Accessor<AllocatedBuffer> indexBuffer;
-	Allocator::Accessor<AllocatedBuffer> vertexBuffer;
-	Allocator::Accessor<AllocatedBuffer> vertexBoneBuffer;
+	VkAllocator::Accessor<AllocatedBuffer> indexBuffer;
+	VkAllocator::Accessor<AllocatedBuffer> vertexBuffer;
+	VkAllocator::Accessor<AllocatedBuffer> vertexBoneBuffer;
 };
 
 // push constants for our mesh object draws
@@ -66,6 +66,6 @@ struct RenderMeshInfo
 
 struct Texture
 {
-	Allocator::Accessor<AllocatedImage> image;
+	VkAllocator::Accessor<AllocatedImage> image;
 	vk::Sampler sampler;
 };
