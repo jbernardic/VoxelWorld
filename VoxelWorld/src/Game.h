@@ -2,6 +2,7 @@
 #include <SDL.h>
 #include "Core/Application.h"
 #include <chrono>
+#include "Scene/Scene.h"
 
 class Game
 {
@@ -15,6 +16,5 @@ private:
 	void Init();
 	void Draw();
 	void Update(double deltaTime);
-	AllocatedImage _testImage1;
-	AllocatedImage _testImage2;
+	Scene scene;
 };

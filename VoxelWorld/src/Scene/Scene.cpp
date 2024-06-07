@@ -1,26 +1,13 @@
 #include "Scene.h"
-#include <vector>
+#include "../Core/Application.h"
 
 
-std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
+Model* Scene::LoadModel(ModelAsset&& modelAsset)
 {
-	Model model;
+	Model* model = new Model();
 	if (!modelAsset.Skeleton.empty())
 	{
-		//initialize joint matrices
-		std::vector<glm::mat4> jointMatrices;
-		jointMatrices.reserve(modelAsset.Skeleton.size());
-
-		for (const auto& bone : modelAsset.Skeleton)
-		{
-			SkeletonJoint joint;
-			joint.children = bone.children;
-			joint.inverseBindMatrix = bone.inverseBindMatrix;
-			joint.parent = bone.parent;
-			joint.transform = Math::Transform(bone.localTransform);
-			jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
-		}
-		model.skeleton.jointMatrixBuffer = Application::Vulkan.UploadJointMatrices(jointMatrices);
+		model->skeleton = std::make_unique<Skeleton>(std::move(modelAsset.Skeleton));
 	}
 
 	//upload textures
@@ -35,50 +22,45 @@ std::list<Model>::iterator Scene::LoadModel(const ModelAsset& modelAsset)
 
 	for (const auto& meshAsset : modelAsset.Meshes)
 	{
-		Mesh mesh;
-		mesh.buffers = Application::Vulkan.UploadMesh(meshAsset.Indices, meshAsset.Vertices, meshAsset.VertexBones);
+		Mesh* mesh = new Mesh();
+		mesh->buffers = Application::Vulkan.UploadMesh(meshAsset.Indices, meshAsset.Vertices, meshAsset.VertexBones);
 		for (const auto& surface : meshAsset.Surfaces)
 		{
 			RenderMeshInfo meshInfo;
 			meshInfo.firstIndex = surface.firstIndex;
 			meshInfo.indexCount = surface.indexCount;
-			meshInfo.indexBuffer = mesh.buffers.indexBuffer->buffer;
+			meshInfo.indexBuffer = mesh->buffers.indexBuffer->buffer;
 
-			if(!modelAsset.Skeleton.empty())
-				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(*model.skeleton.jointMatrixBuffer);
-			meshInfo.pushConstants.useSkeleton = modelAsset.Skeleton.size();
-			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(*mesh.buffers.vertexBuffer);
-			meshInfo.pushConstants.vertexBoneBuffer = Application::Vulkan.GetBufferAddress(*mesh.buffers.vertexBoneBuffer);
-			mesh.surfaces.push_back(std::move(meshInfo));
+			if (model->skeleton)
+			{
+				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(*model->skeleton->JointMatrixBuffer);
+				meshInfo.pushConstants.useSkeleton = true;
+			}
+			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(*mesh->buffers.vertexBuffer);
+			meshInfo.pushConstants.vertexBoneBuffer = Application::Vulkan.GetBufferAddress(*mesh->buffers.vertexBoneBuffer);
+			mesh->surfaces.push_back(std::move(meshInfo));
 		}
-		model.meshes.push_back(std::move(mesh));
+		model->meshes.push_back(std::shared_ptr<Mesh>(mesh));
 	}
-	models.push_back(std::move(model));
-	return --models.end();
+	models.push_back(std::unique_ptr<Model>(model));
+	return models.back().get();
 }
 
-std::list<Model>::iterator Scene::LoadModel(const Model& model)
+Model* Scene::CopyModel(const Model& model)
 {
-	models.push_back(model);
-	return std::list<Model>::iterator();
+	models.push_back(std::unique_ptr<Model>(new Model(model)));
+	return models.back().get();
 }
-
-//void Scene::DestroyMesh(std::list<MeshReference>::iterator it)
-//{
-//	//TODO: destroy skeleton
-//	Application::Vulkan.Allocator.DestroyBuffer(it->meshBuffers.indexBuffer);
-//	Application::Vulkan.Allocator.DestroyBuffer(it->meshBuffers.vertexBuffer);
-//	loadedMeshes.erase(it);
-//}
 
 void Scene::Render(const Camera& camera)
 {
+	std::cout << Application::Vulkan.Allocator->GetBufferCount() << std::endl;
 	auto& ctx = Application::Vulkan.DrawContext;
-	for (auto& model : models)
+	for (std::unique_ptr<Model>& model : models)
 	{
-		for (Mesh& mesh : model.meshes)
+		for (auto& mesh : model->meshes)
 		{
-			for (auto& surface : mesh.surfaces)
+			for (RenderMeshInfo& surface : mesh->surfaces)
 			{
 				surface.pushConstants.worldMatrix = camera.GetViewProjectionMatrix();
 				ctx.meshes.push_back(surface);

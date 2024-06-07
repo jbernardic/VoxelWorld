@@ -49,7 +49,7 @@ struct MeshBuffers
 struct MeshPushConstants
 {
 	glm::mat4 worldMatrix;
-	float useSkeleton;
+	float useSkeleton = false;
 	VkDeviceAddress vertexBuffer;
 	VkDeviceAddress vertexBoneBuffer;
 	VkDeviceAddress jointMatrixBuffer;

@@ -50,15 +50,14 @@ bool Game::Tick()
 }
 
 ModelAsset modelAsset;
-Scene scene;
 Camera camera;
 glm::vec2 MousePosition;
 bool escaped = false;
 
 void Game::Init()
 {
-	modelAsset = Asset::LoadModelGLTF("res/skeleton.glb");
-	scene.LoadModel(modelAsset);
+	modelAsset = Asset::LoadModelGLTF("res/untitled.glb");
+	scene.LoadModel(std::move(modelAsset));
 
 	Application::SetMousePosition(MousePosition.x, MousePosition.y);
 	Application::HideCursor();

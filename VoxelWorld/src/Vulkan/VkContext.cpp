@@ -489,7 +489,7 @@ VkAllocator::Accessor<AllocatedBuffer> VkContext::UploadJointMatrices(const std:
 
         cmd.copyBuffer(staging->buffer, buffer->buffer, copy);
     });
-   // allocator.DestroyBuffer(staging);
+    Allocator->Destroy(staging);
     return buffer;
 }
 
@@ -548,7 +548,7 @@ MeshBuffers VkContext::UploadMesh(const std::vector<uint32_t>& indices, const st
         cmd.copyBuffer(staging->buffer, newSurface.vertexBoneBuffer->buffer, boneCopy);
     });
 
-   // allocator.DestroyBuffer(staging);
+    Allocator->Destroy(staging);
 
     return newSurface;
 }
@@ -614,7 +614,7 @@ VkAllocator::Accessor<AllocatedImage> VkContext::UploadImage(void* data, vk::Ext
         vk::tool::TransitionImage(cmd, new_image->image, vk::ImageLayout::eTransferDstOptimal,
             vk::ImageLayout::eShaderReadOnlyOptimal);
     });
-   // allocator.DestroyBuffer(uploadbuffer);
+    Allocator->Destroy(uploadbuffer);
     return new_image;
 }
 

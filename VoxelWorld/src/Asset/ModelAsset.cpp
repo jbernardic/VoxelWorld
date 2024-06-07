@@ -106,10 +106,10 @@ static std::unique_ptr<ModelAsset::Image> loadImage(fastgltf::Asset& asset, fast
 }
 
 
-static void processNode(int current, std::optional<uint32_t> skeletonParent, std::vector<ModelAsset::Node>& nodes, std::unordered_map<int, int>& joints,
-    std::vector<ModelAsset::Node>& skeleton, glm::mat4 transform = glm::mat4(1.0))
+static void processNode(int current, std::optional<uint32_t> skeletonParent, std::vector<Node>& nodes, std::unordered_map<int, int>& joints,
+    std::vector<Node>& skeleton, glm::mat4 transform = glm::mat4(1.0))
 {
-    nodes[current].globalTransform = transform * nodes[current].localTransform;
+    nodes[current].globalTransform = transform * nodes[current].transform.ToMat4();
 
     auto joint = joints.find(current);
     if (joint != joints.end())
@@ -162,13 +162,13 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
     std::vector<Vertex> vertices;
     std::vector<VertexBone> bones;
     std::vector<ModelAsset::Surface> surfaces;
-    std::vector<ModelAsset::Node> skeletonNodes;
+    std::vector<Node> skeletonNodes;
 
     ModelAsset asset;
 
     if (gltf.skins.size() > 0)
     {
-        std::vector<ModelAsset::Node> nodes(gltf.nodes.size());
+        std::vector<Node> nodes(gltf.nodes.size());
         std::unordered_map<int, int> jointMap;
 
         for (int i = 0; i < gltf.skins[0].joints.size(); i++)
@@ -178,7 +178,7 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
 
         for (int i = 0; i < gltf.nodes.size(); i++)
         {
-            nodes[i].localTransform = convertTransform(gltf.nodes[i].transform);
+            nodes[i].transform = convertTransform(gltf.nodes[i].transform);
             for (auto& childIndex : gltf.nodes[i].children)
             {
                 nodes[i].children.push_back(childIndex);

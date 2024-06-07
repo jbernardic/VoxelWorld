@@ -1,5 +1,5 @@
 #pragma once
-#include "../Core/Application.h"
+#include "../Scene/Common.h"
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
@@ -14,15 +14,6 @@ public:
 	{
 		uint32_t firstIndex;
 		uint32_t indexCount;
-	};
-
-	struct Node
-	{
-		std::optional<uint32_t> parent;
-		std::vector<uint32_t> children;
-		glm::mat4 localTransform;
-		glm::mat4 globalTransform;
-		glm::mat4 inverseBindMatrix;
 	};
 
 	struct Mesh

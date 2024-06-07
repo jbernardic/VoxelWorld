@@ -24,33 +24,44 @@ public:
 	template <class T>
 	class Accessor
 	{
-		public:
-			Accessor() = default;
-			Accessor(uint32_t index, std::vector<T>* items) : index(index), items(items) {};
+	public:
+		Accessor() = default;
+		Accessor(uint32_t index, VkAllocator* allocator) : index(index), allocator(allocator) {};
 
-			const T& operator*() const
-			{
-				return items->at(index);
-			}
+		T& operator*() const
+		{
+			return getItems()->at(index);
+		}
 
-			const T* operator->() const
-			{
-				return &items->at(index);
-			}
+		T* operator->() const
+		{
+			return &getItems()->at(index);
+		}
 
-			bool IsValid()
-			{
-				return items->at(index).allocation != nullptr;
-			}
+		bool IsValid()
+		{
+			return allocator != nullptr && index < getItems()->size() && getItems()->at(index).allocation != nullptr;
+		}
 
-			uint32_t GetIndex()
-			{
-				return index;
-			}
-			
-		private:
-			uint32_t index = 0;
-			std::vector<T>* items = nullptr;
+		void Destroy()
+		{
+			allocator->Destroy(*this);
+		}
+
+		uint32_t GetIndex()
+		{
+			return index;
+		}
+
+	private:
+
+		std::vector<T>* getItems() const
+		{
+			return nullptr;
+		}
+
+		uint32_t index = 0;
+		VkAllocator* allocator = nullptr;
 	};
 
 	VkAllocator(vk::PhysicalDevice pdevice, vk::Device device, vk::Instance instance)
@@ -60,42 +71,48 @@ public:
 		allocatorInfo.device = device;
 		allocatorInfo.instance = instance;
 		allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-		vmaCreateAllocator(&allocatorInfo, &allocator);
+		vmaCreateAllocator(&allocatorInfo, &vmaAllocator);
 	}
 
 	~VkAllocator()
 	{
+		while (!freeBufferIndices.empty())
+		{
+			buffers[freeBufferIndices.top()] = {};
+			freeBufferIndices.pop();
+		}
+
+		while (!freeImageIndices.empty())
+		{
+			images[freeImageIndices.top()] = {};
+			freeImageIndices.pop();
+		}
+
 		for (const auto& e : images)
 		{
-			if (e.image != VK_NULL_HANDLE)
+			if (e.allocation != nullptr)
 			{
-				vmaDestroyImage(allocator, e.image, e.allocation);
+				vmaDestroyImage(vmaAllocator, e.image, e.allocation);
+				VmaAllocatorInfo info;
+				vmaGetAllocatorInfo(vmaAllocator, &info);
+				vkDestroyImageView(info.device, e.imageView, nullptr);
 			}
-			VmaAllocatorInfo info;
-			vmaGetAllocatorInfo(allocator, &info);
-			vkDestroyImageView(info.device, e.imageView, nullptr);
 		}
 		for (const auto& e : buffers)
 		{
-			if (e.buffer != VK_NULL_HANDLE)
+			if (e.allocation != nullptr)
 			{
-				vmaDestroyBuffer(allocator, e.buffer, e.allocation);
+				vmaDestroyBuffer(vmaAllocator, e.buffer, e.allocation);
 			}
 		}
-		vmaDestroyAllocator(allocator);
+		vmaDestroyAllocator(vmaAllocator);
 	}
+
 	VmaAllocator GetAllocator() const
 	{
-		return allocator;
+		return vmaAllocator;
 	}
-	void DestroyBuffer(const AllocatedBuffer& buffer)
-	{
-		vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
-	}
-	void DestroyImage(const AllocatedImage& image)
-	{
-		vmaDestroyImage(allocator, image.image, image.allocation);
-	}
+
 	Accessor<AllocatedBuffer> CreateBuffer(size_t allocSize, vk::BufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 	{
 		// allocate buffer
@@ -109,7 +126,7 @@ public:
 		AllocatedBuffer newBuffer;
 
 		// allocate the buffer
-		VkResult res = vmaCreateBuffer(allocator, (VkBufferCreateInfo*)&bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation,
+		VkResult res = vmaCreateBuffer(vmaAllocator, (VkBufferCreateInfo*)&bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation,
 			&newBuffer.info);
 
 		return addBuffer(std::move(newBuffer));
@@ -129,7 +146,7 @@ public:
 		allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 		// allocate and create the image
-		vmaCreateImage(allocator, (VkImageCreateInfo*)&img_info, &allocinfo, (VkImage*)&newImage.image, &newImage.allocation, nullptr);
+		vmaCreateImage(vmaAllocator, (VkImageCreateInfo*)&img_info, &allocinfo, (VkImage*)&newImage.image, &newImage.allocation, nullptr);
 
 		// if the format is a depth format, we will need to have it use the correct aspect flag
 		vk::ImageAspectFlags aspectFlag = vk::ImageAspectFlagBits::eColor;
@@ -143,23 +160,26 @@ public:
 		view_info.subresourceRange.levelCount = img_info.mipLevels;
 
 		VmaAllocatorInfo info;
-		vmaGetAllocatorInfo(allocator, &info);
+		vmaGetAllocatorInfo(vmaAllocator, &info);
 
 		vkCreateImageView(info.device, (VkImageViewCreateInfo*) & view_info, nullptr, (VkImageView*) & newImage.imageView);
 
 		return addImage(std::move(newImage));
 	}
+	
+	size_t GetBufferCount() { return buffers.size() - freeBufferIndices.size(); }
+	size_t GetImageCount() { return images.size() - freeImageIndices.size(); }
 
-	void DestroyBuffer(Accessor<AllocatedBuffer>& buffer)
+	void Destroy(Accessor<AllocatedBuffer>& buffer)
 	{
 		freeBufferIndices.push(buffer.GetIndex());
-		vmaDestroyBuffer(allocator, buffer->buffer, buffer->allocation);
+		vmaDestroyBuffer(vmaAllocator, buffer->buffer, buffer->allocation);
 	}
 
-	void DestroyImage(Accessor<AllocatedImage>& image)
+	void Destroy(Accessor<AllocatedImage>& image)
 	{
 		freeImageIndices.push(image.GetIndex());
-		vmaDestroyImage(allocator, image->image, image->allocation);
+		vmaDestroyImage(vmaAllocator, image->image, image->allocation);
 	}
 
 private:
@@ -174,11 +194,11 @@ private:
 		}
 		else
 		{
-			images.insert(images.begin() + freeImageIndices.top(), std::move(image));
 			index = freeImageIndices.top();
+			images[index] = std::move(image);
 			freeImageIndices.pop();
 		}
-		return Accessor<AllocatedImage>(index, &images);
+		return Accessor<AllocatedImage>(index, this);
 	}
 
 	Accessor<AllocatedBuffer> addBuffer(AllocatedBuffer&& buffer)
@@ -191,16 +211,28 @@ private:
 		}
 		else
 		{
-			buffers.insert(buffers.begin() + freeBufferIndices.top(), std::move(buffer));
 			index = freeBufferIndices.top();
+			buffers[index] = std::move(buffer);
 			freeBufferIndices.pop();
 		}
-		return Accessor<AllocatedBuffer>(index, &buffers);
+		return Accessor<AllocatedBuffer>(index, this);
 	}
 
-	VmaAllocator allocator;
+	VmaAllocator vmaAllocator;
 	std::stack<uint32_t> freeImageIndices;
 	std::stack<uint32_t> freeBufferIndices;
 	std::vector<AllocatedImage> images;
 	std::vector<AllocatedBuffer> buffers;
 };
+
+template<> 
+inline std::vector<AllocatedImage>* VkAllocator::Accessor<AllocatedImage>::getItems() const
+{
+	return &allocator->images;
+}
+
+template<>
+inline std::vector<AllocatedBuffer>* VkAllocator::Accessor<AllocatedBuffer>::getItems() const
+{
+	return &allocator->buffers;
+}
