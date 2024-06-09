@@ -4,6 +4,7 @@
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
+#include "../Animation/Common.h"
 
 class ModelAsset
 {
@@ -36,6 +37,7 @@ public:
 	std::vector<Node> Skeleton;
 	std::vector<Mesh> Meshes;
 	std::vector<std::unique_ptr<Image>> Textures;
+	std::unordered_map<std::string, Animation> Animations;
 };
 
 namespace Asset {

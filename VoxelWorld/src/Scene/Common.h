@@ -11,14 +11,33 @@ struct Node
 	glm::mat4 inverseBindMatrix;
 };
 
-struct Keyframe
+struct Skeleton
 {
-	float time;
-	std::vector<std::pair<uint32_t, Math::Transform>> transforms;
-};
-
-struct Animation
-{
-	std::string name;
-	std::vector<Keyframe> keyframes;
+	VkAllocator::Accessor<AllocatedBuffer> jointMatrixBuffer;
+	std::vector<Node> joints;
+	~Skeleton()
+	{
+		jointMatrixBuffer.Destroy();
+	}
+	void calculateGlobalTransforms()
+	{
+		uint32_t index = 0;
+		for (Node& joint : joints)
+		{
+			if (!joint.parent.has_value())
+			{
+				processNode(index++, glm::mat4(1.0));
+			}
+		}
+	}
+private:
+	void processNode(uint32_t index, glm::mat4 transform)
+	{
+		joints[index].globalTransform = transform * joints[index].transform.ToMat4();
+		
+		for (auto& child : joints[index].children)
+		{
+			processNode(child, joints[index].globalTransform);
+		}
+	}
 };

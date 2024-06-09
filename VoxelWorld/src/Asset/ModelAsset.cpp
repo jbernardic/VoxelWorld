@@ -1,10 +1,12 @@
 #include "ModelAsset.h"
 #include <iostream>
+#include <set>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-#include <set>
+
+#include "../Animation/Common.h"
 
 static glm::mat4 convertTransform(std::variant<fastgltf::TRS, fastgltf::Node::TransformMatrix> variant)
 {
@@ -106,23 +108,14 @@ static std::unique_ptr<ModelAsset::Image> loadImage(fastgltf::Asset& asset, fast
 }
 
 
-static void processNode(int current, std::optional<uint32_t> skeletonParent, std::vector<Node>& nodes, std::unordered_map<int, int>& joints,
-    std::vector<Node>& skeleton, glm::mat4 transform = glm::mat4(1.0))
+static void calculateGlobalTransform(int current, std::vector<Node>& nodes, glm::mat4 transform = glm::mat4(1.0))
 {
     nodes[current].globalTransform = transform * nodes[current].transform.ToMat4();
-
-    auto joint = joints.find(current);
-    if (joint != joints.end())
-    {
-        skeleton[joint->second] = nodes[current];
-        skeleton[joint->second].parent = skeletonParent;
-        skeletonParent = current;
-    }
 
     for (int i = 0; i < nodes[current].children.size(); i++)
     {
         int childIndex = nodes[current].children[i];
-        processNode(childIndex, skeletonParent, nodes, joints, skeleton, nodes[current].globalTransform);
+        calculateGlobalTransform(childIndex, nodes, nodes[current].globalTransform);
     }
 }
 
@@ -163,6 +156,7 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
     std::vector<VertexBone> bones;
     std::vector<ModelAsset::Surface> surfaces;
     std::vector<Node> skeletonNodes;
+    std::vector<Animation> animations;
 
     ModelAsset asset;
 
@@ -186,11 +180,37 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
             }
         }
 
-        skeletonNodes.resize(jointMap.size());
-        for (int i = 0; i < gltf.nodes.size(); i++)
+        for (int i = 0; i < nodes.size(); i++)
         {
             if(!nodes[i].parent.has_value())
-                processNode(i, {}, nodes, jointMap, skeletonNodes);
+                calculateGlobalTransform(i, nodes);
+        }
+
+        skeletonNodes.resize(jointMap.size());
+        for (int i = 0; i < nodes.size(); i++)
+        {
+            auto joint = jointMap.find(i);
+            if (joint != jointMap.end())
+            {
+                Node node = nodes[i];
+                std::vector<uint32_t> children;
+
+                if (node.parent.has_value() && jointMap.find(*node.parent) != jointMap.end())
+                {
+                    node.parent = jointMap[node.parent.value()];
+                }
+                else node.parent = {};
+
+                for (uint32_t child : node.children)
+                {
+                    if (jointMap.find(child) != jointMap.end())
+                    {
+                        children.push_back(jointMap[child]);
+                    }
+                }
+                node.children = std::move(children);
+                skeletonNodes[joint->second] = std::move(node);
+            }
         }
         
 
@@ -201,6 +221,55 @@ ModelAsset Asset::LoadModelGLTF(std::filesystem::path filePath)
             auto& node = skeletonNodes[index++];
             node.inverseBindMatrix = mat;
         });
+
+        //load animations
+        animations.reserve(gltf.animations.size());
+        for (auto& animation : gltf.animations)
+        {
+            Animation _animation;
+            _animation.name = animation.name;
+            for (int i = 0; i < animation.samplers.size(); i++)
+            {
+                AnimationSampler _sampler;
+                auto& sampler = animation.samplers[i];
+                auto& inputAccessor = gltf.accessors[sampler.inputAccessor];
+                auto& outputAccessor = gltf.accessors[sampler.outputAccessor];
+
+                _sampler.keyframes.resize(inputAccessor.count);
+                uint32_t index = 0;
+                fastgltf::iterateAccessor<float>(gltf, inputAccessor,
+                    [&](float time) {
+                    _sampler.keyframes[index++].time = time;
+                });
+
+                if (_sampler.keyframes.back().time > _animation.duration)
+                {
+                    _animation.duration = _sampler.keyframes.back().time;
+                }
+
+                index = 0;
+                fastgltf::iterateAccessor<glm::vec3>(gltf, outputAccessor,
+                    [&](glm::vec3 v) {
+                    _sampler.keyframes[index++].transform = v;
+                });
+                _animation.samplers.push_back(std::move(_sampler));
+            }
+
+            for (auto& channel : animation.channels)
+            {
+
+                if (!channel.nodeIndex.has_value()) continue;
+                AnimationChannel _channel;
+
+                auto joint = jointMap.find(channel.nodeIndex.value());
+                if (joint == jointMap.end()) continue;
+
+                _channel.nodeIndex = joint->second;
+                _channel.path = channel.path;
+                _animation.samplers[channel.samplerIndex].channels.push_back(std::move(_channel));
+            }
+            asset.Animations[_animation.name] = std::move(_animation);
+        }
     }
     // load all textures
     for (fastgltf::Image& image : gltf.images)

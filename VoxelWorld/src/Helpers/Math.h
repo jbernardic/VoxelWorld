@@ -7,9 +7,9 @@
 namespace Math {
     struct Transform
     {
-        glm::vec3 translation = glm::vec3();
-        glm::quat rotation = glm::quat();
-        glm::vec3 scale = glm::vec3();
+        glm::vec3 translation = glm::vec3(0.0, 0.0, 0.0);
+        glm::quat rotation = glm::quat(0.0, 0.0, 0.0, 1.0);
+        glm::vec3 scale = glm::vec3(1.0, 1.0, 1.0);
 
         Transform() = default;
 

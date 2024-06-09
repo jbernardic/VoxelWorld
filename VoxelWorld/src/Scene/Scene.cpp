@@ -7,7 +7,11 @@ Model* Scene::LoadModel(ModelAsset&& modelAsset)
 	Model* model = new Model();
 	if (!modelAsset.Skeleton.empty())
 	{
-		model->skeleton = std::make_unique<Skeleton>(std::move(modelAsset.Skeleton));
+		model->skeleton = LoadSkeleton(std::move(modelAsset.Skeleton));
+		if (!modelAsset.Animations.empty())
+		{
+			model->animator = std::move(AnimationController(model->skeleton.get(), std::move(modelAsset.Animations)));
+		}
 	}
 
 	//upload textures
@@ -33,7 +37,7 @@ Model* Scene::LoadModel(ModelAsset&& modelAsset)
 
 			if (model->skeleton)
 			{
-				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(*model->skeleton->JointMatrixBuffer);
+				meshInfo.pushConstants.jointMatrixBuffer = Application::Vulkan.GetBufferAddress(*model->skeleton->jointMatrixBuffer);
 				meshInfo.pushConstants.useSkeleton = true;
 			}
 			meshInfo.pushConstants.vertexBuffer = Application::Vulkan.GetBufferAddress(*mesh->buffers.vertexBuffer);
@@ -42,8 +46,41 @@ Model* Scene::LoadModel(ModelAsset&& modelAsset)
 		}
 		model->meshes.push_back(std::shared_ptr<Mesh>(mesh));
 	}
+
 	models.push_back(std::unique_ptr<Model>(model));
 	return models.back().get();
+}
+
+
+std::unique_ptr<Skeleton> Scene::LoadSkeleton(std::vector<Node>&& joints)
+{
+	Skeleton* skeleton = new Skeleton();
+	skeleton->joints = std::move(joints);
+	std::vector<glm::mat4> jointMatrices;
+	jointMatrices.reserve(skeleton->joints.size());
+
+	for (const auto& bone : skeleton->joints)
+	{
+		jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
+	}
+
+	skeleton->jointMatrixBuffer = Application::Vulkan.UploadJointMatrices(jointMatrices);
+	return std::unique_ptr<Skeleton>(skeleton);
+}
+
+void Scene::UpdateSkeletonBuffer(Skeleton& skeleton)
+{
+	std::vector<glm::mat4> jointMatrices;
+	jointMatrices.reserve(skeleton.joints.size());
+
+	for (const auto& bone : skeleton.joints)
+	{
+		jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
+	}
+
+	std::cout << skeleton.joints[0].transform.translation.x << std::endl;
+
+	Application::Vulkan.UpdateJointMatrices(skeleton.jointMatrixBuffer, jointMatrices);
 }
 
 Model* Scene::CopyModel(const Model& model)
@@ -54,10 +91,12 @@ Model* Scene::CopyModel(const Model& model)
 
 void Scene::Render(const Camera& camera)
 {
-	std::cout << Application::Vulkan.Allocator->GetBufferCount() << std::endl;
 	auto& ctx = Application::Vulkan.DrawContext;
 	for (std::unique_ptr<Model>& model : models)
 	{
+		model->animator->Play();
+		UpdateSkeletonBuffer(*model->skeleton);
+
 		for (auto& mesh : model->meshes)
 		{
 			for (RenderMeshInfo& surface : mesh->surfaces)

@@ -43,6 +43,7 @@ public:
     VkAllocator::Accessor<AllocatedImage> UploadImage(void* data, vk::Extent3D size, vk::Format format, vk::ImageUsageFlags usage);
     VkAllocator::Accessor<AllocatedBuffer> UploadJointMatrices(const std::vector<glm::mat4>& mats);
 
+    void UpdateJointMatrices(VkAllocator::Accessor<AllocatedBuffer>& buffer, const std::vector<glm::mat4>& mats);
     void UpdateMeshTextures(const std::vector<Texture>& textures);
 
     vk::UniqueInstance Instance;

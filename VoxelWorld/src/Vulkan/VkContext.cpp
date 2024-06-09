@@ -618,6 +618,23 @@ VkAllocator::Accessor<AllocatedImage> VkContext::UploadImage(void* data, vk::Ext
     return new_image;
 }
 
+void VkContext::UpdateJointMatrices(VkAllocator::Accessor<AllocatedBuffer>& buffer, const std::vector<glm::mat4>& mats)
+{
+    const size_t size = mats.size() * sizeof(glm::mat4);
+    VkAllocator::Accessor<AllocatedBuffer> staging = Allocator->CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+    void* data = staging->allocation->GetMappedData();
+    memcpy(data, mats.data(), size);
+    ImmediateSubmit([&](vk::CommandBuffer cmd) {
+        vk::BufferCopy copy{ 0 };
+        copy.dstOffset = 0;
+        copy.srcOffset = 0;
+        copy.size = size;
+
+        cmd.copyBuffer(staging->buffer, buffer->buffer, copy);
+    });
+    Allocator->Destroy(staging);
+}
+
 void VkContext::UpdateMeshTextures(const std::vector<Texture>& textures)
 {
     if (textures.size() > MAX_TEXTURE_COUNT)
