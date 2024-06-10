@@ -34,7 +34,13 @@ public:
 		~Image();
 	};
 
-	std::vector<Node> Skeleton;
+	struct Skeleton
+	{
+		std::vector<Node> nodes;
+		std::vector<uint32_t> joints;
+	};
+
+	Skeleton Skelet;
 	std::vector<Mesh> Meshes;
 	std::vector<std::unique_ptr<Image>> Textures;
 	std::unordered_map<std::string, Animation> Animations;

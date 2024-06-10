@@ -7,14 +7,15 @@ struct Node
 	std::optional<uint32_t> parent;
 	std::vector<uint32_t> children;
 	Math::Transform transform;
-	glm::mat4 globalTransform;
-	glm::mat4 inverseBindMatrix;
+	glm::mat4 globalTransform = glm::mat4(1.0);
+	glm::mat4 inverseBindMatrix = glm::mat4(1.0);
 };
 
 struct Skeleton
 {
 	VkAllocator::Accessor<AllocatedBuffer> jointMatrixBuffer;
-	std::vector<Node> joints;
+	std::vector<Node> nodes;
+	std::vector<uint32_t> joints;
 	~Skeleton()
 	{
 		jointMatrixBuffer.Destroy();
@@ -22,22 +23,23 @@ struct Skeleton
 	void calculateGlobalTransforms()
 	{
 		uint32_t index = 0;
-		for (Node& joint : joints)
+		for (Node& node : nodes)
 		{
-			if (!joint.parent.has_value())
+			if (!node.parent.has_value())
 			{
-				processNode(index++, glm::mat4(1.0));
+				processNode(index, glm::mat4(1.0));
 			}
+			index++;
 		}
 	}
 private:
 	void processNode(uint32_t index, glm::mat4 transform)
 	{
-		joints[index].globalTransform = transform * joints[index].transform.ToMat4();
+		nodes[index].globalTransform = transform * nodes[index].transform.ToMat4();
 		
-		for (auto& child : joints[index].children)
+		for (auto& child : nodes[index].children)
 		{
-			processNode(child, joints[index].globalTransform);
+			processNode(child, nodes[index].globalTransform);
 		}
 	}
 };

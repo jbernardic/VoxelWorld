@@ -41,7 +41,7 @@ class Scene
 public:
 	Model* LoadModel(ModelAsset&& meshAsset);
 	Model* CopyModel(const Model& model);
-	std::unique_ptr<Skeleton> LoadSkeleton(std::vector<Node>&& joints);
+	std::unique_ptr<Skeleton> LoadSkeleton(ModelAsset::Skeleton&& skeleton);
 	void UpdateSkeletonBuffer(Skeleton& skeleton);
 	void Render(const Camera& camera);
 private:

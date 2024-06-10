@@ -8,7 +8,7 @@
 struct AnimationKeyframe
 {
 	float time;
-	glm::vec3 transform;
+	glm::vec4 transform;
 };
 
 struct AnimationChannel

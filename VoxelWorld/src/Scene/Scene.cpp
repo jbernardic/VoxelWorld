@@ -5,9 +5,9 @@
 Model* Scene::LoadModel(ModelAsset&& modelAsset)
 {
 	Model* model = new Model();
-	if (!modelAsset.Skeleton.empty())
+	if (!modelAsset.Skelet.joints.empty())
 	{
-		model->skeleton = LoadSkeleton(std::move(modelAsset.Skeleton));
+		model->skeleton = LoadSkeleton(std::move(modelAsset.Skelet));
 		if (!modelAsset.Animations.empty())
 		{
 			model->animator = std::move(AnimationController(model->skeleton.get(), std::move(modelAsset.Animations)));
@@ -52,15 +52,17 @@ Model* Scene::LoadModel(ModelAsset&& modelAsset)
 }
 
 
-std::unique_ptr<Skeleton> Scene::LoadSkeleton(std::vector<Node>&& joints)
+std::unique_ptr<Skeleton> Scene::LoadSkeleton(ModelAsset::Skeleton&& s)
 {
 	Skeleton* skeleton = new Skeleton();
-	skeleton->joints = std::move(joints);
+	skeleton->joints = std::move(s.joints);
+	skeleton->nodes = std::move(s.nodes);
 	std::vector<glm::mat4> jointMatrices;
 	jointMatrices.reserve(skeleton->joints.size());
 
-	for (const auto& bone : skeleton->joints)
+	for (const auto& jointNode : skeleton->joints)
 	{
+		auto& bone = skeleton->nodes[jointNode];
 		jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
 	}
 
@@ -73,12 +75,13 @@ void Scene::UpdateSkeletonBuffer(Skeleton& skeleton)
 	std::vector<glm::mat4> jointMatrices;
 	jointMatrices.reserve(skeleton.joints.size());
 
-	for (const auto& bone : skeleton.joints)
+	for (const auto& jointNode : skeleton.joints)
 	{
+		auto& bone = skeleton.nodes[jointNode];
 		jointMatrices.push_back(bone.globalTransform * bone.inverseBindMatrix);
 	}
 
-	std::cout << skeleton.joints[0].transform.translation.x << std::endl;
+	//std::cout << skeleton.joints[0].transform.translation.x << std::endl;
 
 	Application::Vulkan.UpdateJointMatrices(skeleton.jointMatrixBuffer, jointMatrices);
 }
